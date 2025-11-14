@@ -45,6 +45,16 @@
 				"default": "./dist/lib/cancellation.cjs"
 			}
 		},
+		"./decorators": {
+			"import": {
+				"types": "./dist/lib/decorators.d.mts",
+				"default": "./dist/lib/decorators.mjs"
+			},
+			"require": {
+				"types": "./dist/lib/decorators.d.cts",
+				"default": "./dist/lib/decorators.cjs"
+			}
+		},
 		"./fn": {
 			"import": {
 				"types": "./dist/lib/fn.d.mts",
