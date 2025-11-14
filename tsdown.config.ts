@@ -1,4 +1,4 @@
-import { defineConfig } from 'tsup';
+import { defineConfig } from 'tsdown';
 
 export default defineConfig(() => ({
 	clean: true,
@@ -7,7 +7,7 @@ export default defineConfig(() => ({
 	],
 	format: ['cjs', 'esm'],
 	dts: true,
-	minify: 'terser',
+	minify: true,
 	skipNodeModulesBundle: true,
 	target: 'node19',
 	tsconfig: './tsconfig.json',
