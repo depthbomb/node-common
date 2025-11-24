@@ -1,6 +1,6 @@
 import { defineConfig } from 'tsdown';
 
-export default defineConfig(() => ({
+export default defineConfig({
 	clean: true,
 	entry: [
 		'src/**/*.ts'
@@ -11,5 +11,5 @@ export default defineConfig(() => ({
 	skipNodeModulesBundle: true,
 	target: 'node19',
 	tsconfig: './tsconfig.json',
-	splitting: false,
-}));
+	unbundle: true
+});

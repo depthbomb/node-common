@@ -5,3 +5,4 @@ export * from './lib/fn';
 export * from './lib/fs';
 export * from './lib/lazy';
 export * from './lib/queue';
+export * from './lib/types';

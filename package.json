@@ -10,7 +10,7 @@
 	"keywords": [
 		"typescript",
 		"nodejs",
-		"electron"
+		"utilities"
 	],
 	"main": "./dist/index.cjs",
 	"module": "./dist/index.mjs",
@@ -93,6 +93,14 @@
 			"require": {
 				"types": "./dist/lib/queue.d.cts",
 				"default": "./dist/lib/queue.cjs"
+			}
+		},
+		"./types": {
+			"import": {
+				"types": "./dist/lib/types.d.mts"
+			},
+			"require": {
+				"types": "./dist/lib/types.d.cts"
 			}
 		}
 	},
