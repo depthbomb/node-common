@@ -484,7 +484,7 @@ export class Path {
 	}
 
 	public valueOf(): string {
-		return this.#path;
+		return this.toString();
 	}
 
 	public equals(other: PathLike): boolean {
@@ -507,6 +507,10 @@ export class Path {
 	public toUri(): string {
 		const absolute = this.absolute();
 		return 'file://' + absolute.toString();
+	}
+
+	public static from(...pathSegments: PathLike[]): Path {
+		return new Path(...pathSegments);
 	}
 
 	public static fromUri(uri: string): Path {
