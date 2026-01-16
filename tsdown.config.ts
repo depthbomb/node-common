@@ -9,7 +9,10 @@ export default defineConfig({
 	dts: true,
 	minify: true,
 	skipNodeModulesBundle: true,
-	target: 'node19',
-	tsconfig: './tsconfig.json',
-	unbundle: true
+	target: 'node22',
+	exports: {
+		legacy: true,
+		packageJson: false,
+	},
+	tsconfig: './tsconfig.json'
 });

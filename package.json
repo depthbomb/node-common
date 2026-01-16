@@ -5,7 +5,7 @@
 	"description": "A set of common utilities and functions for Node.js",
 	"license": "MIT",
 	"engines": {
-		"node": ">=19"
+		"node": ">=22"
 	},
 	"keywords": [
 		"typescript",
@@ -16,94 +16,21 @@
 	"module": "./dist/index.mjs",
 	"exports": {
 		".": {
-			"import": {
-				"types": "./dist/index.d.mts",
-				"default": "./dist/index.mjs"
-			},
-			"require": {
-				"types": "./dist/index.d.cts",
-				"default": "./dist/index.cjs"
-			}
-		},
-		"./async": {
-			"import": {
-				"types": "./dist/lib/async.d.mts",
-				"default": "./dist/lib/async.mjs"
-			},
-			"require": {
-				"types": "./dist/lib/async.d.cts",
-				"default": "./dist/lib/async.cjs"
-			}
+			"require": "./dist/index.cjs",
+			"import": "./dist/index.mjs"
 		},
 		"./cancellation": {
-			"import": {
-				"types": "./dist/lib/cancellation.d.mts",
-				"default": "./dist/lib/cancellation.mjs"
-			},
-			"require": {
-				"types": "./dist/lib/cancellation.d.cts",
-				"default": "./dist/lib/cancellation.cjs"
-			}
+			"require": "./dist/cancellation.cjs",
+			"import": "./dist/cancellation.mjs"
 		},
-		"./decorators": {
-			"import": {
-				"types": "./dist/lib/decorators.d.mts",
-				"default": "./dist/lib/decorators.mjs"
-			},
-			"require": {
-				"types": "./dist/lib/decorators.d.cts",
-				"default": "./dist/lib/decorators.cjs"
-			}
-		},
-		"./fn": {
-			"import": {
-				"types": "./dist/lib/fn.d.mts",
-				"default": "./dist/lib/fn.mjs"
-			},
-			"require": {
-				"types": "./dist/lib/fn.d.cts",
-				"default": "./dist/lib/fn.cjs"
-			}
-		},
-		"./fs": {
-			"import": {
-				"types": "./dist/lib/fs.d.mts",
-				"default": "./dist/lib/fs.mjs"
-			},
-			"require": {
-				"types": "./dist/lib/fs.d.cts",
-				"default": "./dist/lib/fs.cjs"
-			}
-		},
-		"./lazy": {
-			"import": {
-				"types": "./dist/lib/lazy.d.mts",
-				"default": "./dist/lib/lazy.mjs"
-			},
-			"require": {
-				"types": "./dist/lib/lazy.d.cts",
-				"default": "./dist/lib/lazy.cjs"
-			}
-		},
-		"./queue": {
-			"import": {
-				"types": "./dist/lib/queue.d.mts",
-				"default": "./dist/lib/queue.mjs"
-			},
-			"require": {
-				"types": "./dist/lib/queue.d.cts",
-				"default": "./dist/lib/queue.cjs"
-			}
-		},
-		"./types": {
-			"import": {
-				"types": "./dist/lib/types.d.mts"
-			},
-			"require": {
-				"types": "./dist/lib/types.d.cts"
-			}
+		"./pathlib": {
+			"require": "./dist/pathlib.cjs",
+			"import": "./dist/pathlib.mjs"
 		}
 	},
+	"files": [
+		"dist"
+	],
 	"sideEffects": false,
 	"publishConfig": {
 		"access": "public"
@@ -115,11 +42,7 @@
 	"bugs": {
 		"url": "https://github.com/depthbomb/node-common/issues"
 	},
-	"files": [
-		"dist"
-	],
 	"scripts": {
-		"start": "node .",
 		"build": "tsc",
 		"dist": "tsdown",
 		"release": "yarn dist && release-it",
@@ -135,5 +58,6 @@
 		"tsdown": "^0.19.0-beta.3",
 		"typescript": "^5.9.3"
 	},
-	"packageManager": "yarn@4.12.0"
+	"packageManager": "yarn@4.12.0",
+	"types": "./dist/index.d.cts"
 }
