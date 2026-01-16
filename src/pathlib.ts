@@ -488,7 +488,11 @@ export class Path {
 	}
 
 	public valueOf(): string {
-		return this.toString();
+		return this.#path;
+	}
+
+	public [Symbol.toPrimitive](_hint: string) {
+		return this.#path;
 	}
 
 	public equals(other: PathLike): boolean {
