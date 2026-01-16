@@ -479,6 +479,10 @@ export class Path {
 		}
 	}
 
+	public toWriteStream(options?: Parameters<typeof fsSync.createWriteStream>[1]): fsSync.WriteStream {
+		return fsSync.createWriteStream(this.#path, options);
+	}
+
 	public toString(): string {
 		return this.#path;
 	}
