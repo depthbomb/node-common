@@ -11,7 +11,6 @@ export default defineConfig({
 	skipNodeModulesBundle: true,
 	target: 'node24',
 	exports: {
-		legacy: true,
 		packageJson: false,
 	},
 	tsconfig: './tsconfig.json'

@@ -16,6 +16,10 @@
 	"module": "./dist/index.mjs",
 	"types": "./dist/index.d.cts",
 	"exports": {
+		".": {
+			"require": "./dist/index.cjs",
+			"import": "./dist/index.mjs"
+		},
 		"./cancellation": {
 			"require": "./dist/cancellation.cjs",
 			"import": "./dist/cancellation.mjs"
