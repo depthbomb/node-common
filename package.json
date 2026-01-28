@@ -1,6 +1,6 @@
 {
 	"name": "@depthbomb/node-common",
-	"version": "2.2.0",
+	"version": "2.2.1",
 	"author": "depthbomb",
 	"description": "A set of common utilities and functions for Node.js",
 	"license": "MIT",
