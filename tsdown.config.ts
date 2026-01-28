@@ -9,7 +9,7 @@ export default defineConfig({
 	dts: true,
 	minify: true,
 	skipNodeModulesBundle: true,
-	target: 'node22',
+	target: 'node24',
 	exports: {
 		legacy: true,
 		packageJson: false,
