@@ -245,7 +245,23 @@ export class CancellationToken extends EventEmitter {
 	}
 
 	public delay(ms: number): Promise<void> {
-		return this.race(new Promise<void>((resolve) => setTimeout(resolve, ms)));
+		if (this.isCancelled) {
+			return Promise.reject(new OperationCancelledError(this.cancellationReason, this));
+		}
+
+		return new Promise<void>((resolve, reject) => {
+			const timeoutId = setTimeout(() => {
+				this.removeListener('cancelled', onCancelled);
+				resolve();
+			}, ms);
+
+			const onCancelled = (token: CancellationToken) => {
+				clearTimeout(timeoutId);
+				reject(new OperationCancelledError(token.cancellationReason, token));
+			};
+
+			this.once('cancelled', onCancelled);
+		});
 	}
 
 	public toAbortSignal(): AbortSignal {
