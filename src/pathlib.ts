@@ -399,11 +399,30 @@ export class Path {
 		const dirs  = [] as Path[];
 		const files = [] as Path[];
 
-		for await (const entry of this.iterdir()) {
-			if (await entry.isDir()) {
-				dirs.push(entry);
-			} else {
-				files.push(entry);
+		const entries = await fs.readdir(this.#path, { withFileTypes: true });
+		for (const entry of entries) {
+			const entryPath = this.joinpath(entry.name);
+
+			if (entry.isDirectory()) {
+				dirs.push(entryPath);
+				continue;
+			}
+
+			if (entry.isFile() || entry.isSymbolicLink()) {
+				files.push(entryPath);
+				continue;
+			}
+
+			// Fallback for file systems that don't populate dirent type.
+			try {
+				const stats = await fs.lstat(entryPath.toString());
+				if (stats.isDirectory()) {
+					dirs.push(entryPath);
+				} else {
+					files.push(entryPath);
+				}
+			} catch {
+				files.push(entryPath);
 			}
 		}
 
