@@ -88,7 +88,57 @@ export class CancellationToken extends EventEmitter {
 	private timeoutId?: NodeJS.Timeout;
 	private abortController?: AbortController;
 
-	public static readonly None = new CancellationToken();
+	public static readonly None: CancellationToken = new (class NoneCancellationToken extends CancellationToken {
+		public override get canBeCancelled(): boolean {
+			return false;
+		}
+
+		public override throwIfCancellationRequested(_message?: string): void {
+			// Intentionally no-op: CancellationToken.None can never be cancelled.
+		}
+
+		public override register(_callback: CancellationCallback): CancellationTokenRegistration {
+			return {
+				token: this,
+				unregister(): void {},
+			};
+		}
+
+		public override registerAsync(_callback: AsyncCancellationCallback): CancellationTokenRegistration {
+			return {
+				token: this,
+				unregister(): void {},
+			};
+		}
+
+		public override cancel(_reason?: string): void {
+			// Intentionally no-op: CancellationToken.None is immutable.
+		}
+
+		public override createLinkedToken(options: Omit<CancellationTokenOptions, 'parent'> = {}): CancellationToken {
+			return new CancellationToken(options);
+		}
+
+		public override waitForCancellation(): Promise<void> {
+			return new Promise<void>(() => {});
+		}
+
+		public override race<T>(promise: Promise<T>): Promise<T> {
+			return promise;
+		}
+
+		public override delay(ms: number): Promise<void> {
+			return new Promise<void>((resolve) => setTimeout(resolve, ms));
+		}
+
+		public override toAbortSignal(): AbortSignal {
+			return new AbortController().signal;
+		}
+
+		public override dispose(): void {
+			// Intentionally no-op: disposing CancellationToken.None has no effect.
+		}
+	})();
 	public static readonly Cancelled = (() => {
 		const token = new CancellationToken();
 		token.cancel('Pre-cancelled token');
