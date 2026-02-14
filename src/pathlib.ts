@@ -3,6 +3,7 @@ import * as path from 'node:path';
 import * as fsSync from 'node:fs';
 import * as fs from 'node:fs/promises';
 import * as readline from 'node:readline';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 export type PathLike = string | Path;
 
@@ -541,8 +542,7 @@ export class Path {
 	}
 
 	public toUri(): string {
-		const absolute = this.absolute();
-		return 'file://' + absolute.toString();
+		return pathToFileURL(this.absolute().toString()).href;
 	}
 
 	public static from(...pathSegments: PathLike[]): Path {
@@ -550,9 +550,11 @@ export class Path {
 	}
 
 	public static fromUri(uri: string): Path {
-		if (!uri.startsWith('file://')) {
+		const url = new URL(uri);
+		if (url.protocol !== 'file:') {
 			throw new Error('URI must start with file://');
 		}
-		return new Path(decodeURIComponent(uri.slice(7)));
+
+		return new Path(fileURLToPath(url));
 	}
 }
