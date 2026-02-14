@@ -43,7 +43,8 @@ class TokenRegistration implements CancellationTokenRegistration {
 		public readonly token: CancellationToken,
 		private readonly callback: CancellationCallback | AsyncCancellationCallback,
 		private readonly emitter: EventEmitter,
-		private readonly isAsync: boolean = false
+		private readonly isAsync: boolean = false,
+		private readonly onUnregister?: (registration: TokenRegistration) => void
 	) {
 		if (isAsync) {
 			this.emitter.on('cancelled', this.asyncHandler);
@@ -74,6 +75,7 @@ class TokenRegistration implements CancellationTokenRegistration {
 		this.isUnregistered = true;
 		this.emitter.removeListener('cancelled', this.syncHandler);
 		this.emitter.removeListener('cancelled', this.asyncHandler);
+		this.onUnregister?.(this);
 	}
 }
 
@@ -87,6 +89,9 @@ export class CancellationToken extends EventEmitter {
 	private parent?: CancellationToken;
 	private timeoutId?: NodeJS.Timeout;
 	private abortController?: AbortController;
+	private parentRegistration?: CancellationTokenRegistration;
+	private abortSignal?: AbortSignal;
+	private abortSignalHandler?: () => void;
 
 	public static readonly None: CancellationToken = new (class NoneCancellationToken extends CancellationToken {
 		public override get canBeCancelled(): boolean {
@@ -155,7 +160,7 @@ export class CancellationToken extends EventEmitter {
 			if (options.parent.isCancellationRequested) {
 				this.cancel(options.parent.cancellationReason);
 			} else {
-				options.parent.register(() => this.cancel('Parent token cancelled'));
+				this.parentRegistration = options.parent.register(() => this.cancel('Parent token cancelled'));
 			}
 		}
 
@@ -169,9 +174,11 @@ export class CancellationToken extends EventEmitter {
 			if (options.signal.aborted) {
 				this.cancel('AbortSignal was already aborted');
 			} else {
-				options.signal.addEventListener('abort', () => {
+				this.abortSignal = options.signal;
+				this.abortSignalHandler = () => {
 					this.cancel('AbortSignal was aborted');
-				});
+				};
+				options.signal.addEventListener('abort', this.abortSignalHandler, { once: true });
 			}
 		}
 	}
@@ -212,9 +219,15 @@ export class CancellationToken extends EventEmitter {
 	public register(callback: CancellationCallback): CancellationTokenRegistration {
 		if (this.isCancelled) {
 			setImmediate(() => callback(this));
+			return {
+				token: this,
+				unregister(): void {},
+			};
 		}
 
-		const registration = new TokenRegistration(this, callback, this);
+		const registration = new TokenRegistration(this, callback, this, false, (unregistered) => {
+			this.registrations.delete(unregistered);
+		});
 		this.registrations.add(registration);
 		return registration;
 	}
@@ -228,11 +241,34 @@ export class CancellationToken extends EventEmitter {
 					console.error('Error in immediate async cancellation callback:', error);
 				}
 			});
+			return {
+				token: this,
+				unregister(): void {},
+			};
 		}
 
-		const registration = new TokenRegistration(this, callback, this, true);
+		const registration = new TokenRegistration(this, callback, this, true, (unregistered) => {
+			this.registrations.delete(unregistered);
+		});
 		this.registrations.add(registration);
 		return registration;
+	}
+
+	private detachExternalRegistrations(): void {
+		if (this.parentRegistration) {
+			this.parentRegistration.unregister();
+			this.parentRegistration = undefined;
+		}
+
+		if (this.parent) {
+			this.parent.children.delete(this);
+		}
+
+		if (this.abortSignal && this.abortSignalHandler) {
+			this.abortSignal.removeEventListener('abort', this.abortSignalHandler);
+			this.abortSignal = undefined;
+			this.abortSignalHandler = undefined;
+		}
 	}
 
 	public cancel(reason?: string): void {
@@ -247,9 +283,12 @@ export class CancellationToken extends EventEmitter {
 			this.timeoutId = undefined;
 		}
 
+		this.detachExternalRegistrations();
+
 		for (const child of this.children) {
 			child.cancel('Parent token cancelled');
 		}
+		this.children.clear();
 
 		this.emit('cancelled', this);
 
@@ -330,11 +369,8 @@ export class CancellationToken extends EventEmitter {
 
 	public dispose(): void {
 		this.cancel('Token disposed');
+		this.detachExternalRegistrations();
 		this.removeAllListeners();
-
-		if (this.parent) {
-			this.parent.children.delete(this);
-		}
 	}
 
 	public override toString(): string {
