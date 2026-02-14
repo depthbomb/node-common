@@ -47,7 +47,8 @@
 		"build": "tsc",
 		"dist": "tsdown",
 		"release": "yarn dist && release-it",
-		"lint": "eslint ./src --ext .ts"
+		"lint": "eslint ./src --ext .ts",
+		"test": "vitest"
 	},
 	"devDependencies": {
 		"@types/eslint": "^9.6.1",
@@ -57,7 +58,8 @@
 		"eslint": "^10.0.0",
 		"release-it": "^19.2.4",
 		"tsdown": "^0.20.3",
-		"typescript": "^5.9.3"
+		"typescript": "^5.9.3",
+		"vitest": "^4.0.18"
 	},
 	"packageManager": "yarn@4.12.0"
 }
