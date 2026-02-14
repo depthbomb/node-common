@@ -2,6 +2,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import * as fsSync from 'node:fs';
 import * as fs from 'node:fs/promises';
+import * as readline from 'node:readline';
 
 export type PathLike = string | Path;
 
@@ -263,10 +264,18 @@ export class Path {
 
 	// eslint-disable-next-line no-undef
 	public async *readLines(encoding: BufferEncoding = 'utf-8'): AsyncIterableIterator<string> {
-		const content = await this.readText(encoding);
-		const lines   = content.split(/\r?\n/);
-		for (const line of lines) {
-			yield line;
+		const stream = fsSync.createReadStream(this.#path, { encoding });
+		const lines = readline.createInterface({
+			input: stream,
+			crlfDelay: Infinity,
+		});
+
+		try {
+			for await (const line of lines) {
+				yield line;
+			}
+		} finally {
+			lines.close();
 		}
 	}
 
