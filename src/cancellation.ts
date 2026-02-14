@@ -309,6 +309,7 @@ export class CancellationToken extends EventEmitter {
 export class CancellationTokenSource {
 	private tokenInstance: CancellationToken;
 	private isDisposed = false;
+	private readonly linkedTokenRegistrations = new Set<CancellationTokenRegistration>();
 
 	constructor(options: CancellationTokenOptions = {}) {
 		this.tokenInstance = new CancellationToken(options);
@@ -325,6 +326,7 @@ export class CancellationTokenSource {
 
 	public cancel(reason?: string): void {
 		this.throwIfDisposed();
+		this.unlinkLinkedTokens();
 		this.tokenInstance.cancel(reason);
 	}
 
@@ -341,11 +343,8 @@ export class CancellationTokenSource {
 		if (this.isDisposed) return;
 
 		this.isDisposed = true;
+		this.unlinkLinkedTokens();
 		this.tokenInstance.dispose();
-	}
-
-	private throwIfDisposed(): void {
-		if (this.isDisposed) throw new Error('CancellationTokenSource has been disposed');
 	}
 
 	public static createLinkedTokenSource(...tokens: CancellationToken[]): CancellationTokenSource {
@@ -353,12 +352,19 @@ export class CancellationTokenSource {
 
 		for (const token of tokens) {
 			if (token.isCancellationRequested) {
-				source.cancel('Linked token was already cancelled');
+				source.tokenInstance.cancel('Linked token was already cancelled');
+				source.unlinkLinkedTokens();
 				break;
 			} else {
-				token.register((cancelledToken) => {
-					source.cancel(`Linked token cancelled: ${cancelledToken.cancellationReason}`);
+				const registration = token.register((cancelledToken) => {
+					if (source.isDisposed || source.tokenInstance.isCancellationRequested) {
+						return;
+					}
+
+					source.tokenInstance.cancel(`Linked token cancelled: ${cancelledToken.cancellationReason}`);
+					source.unlinkLinkedTokens();
 				});
+				source.linkedTokenRegistrations.add(registration);
 			}
 		}
 
@@ -371,6 +377,17 @@ export class CancellationTokenSource {
 
 	public static createWithAbortSignal(signal: AbortSignal): CancellationTokenSource {
 		return new CancellationTokenSource({ signal });
+	}
+
+	private unlinkLinkedTokens(): void {
+		for (const registration of this.linkedTokenRegistrations) {
+			registration.unregister();
+		}
+		this.linkedTokenRegistrations.clear();
+	}
+
+	private throwIfDisposed(): void {
+		if (this.isDisposed) throw new Error('CancellationTokenSource has been disposed');
 	}
 }
 

@@ -17,16 +17,16 @@
 	"types": "./dist/index.d.cts",
 	"exports": {
 		".": {
-			"require": "./dist/index.cjs",
-			"import": "./dist/index.mjs"
+			"import": "./dist/index.mjs",
+			"require": "./dist/index.cjs"
 		},
 		"./cancellation": {
-			"require": "./dist/cancellation.cjs",
-			"import": "./dist/cancellation.mjs"
+			"import": "./dist/cancellation.mjs",
+			"require": "./dist/cancellation.cjs"
 		},
 		"./pathlib": {
-			"require": "./dist/pathlib.cjs",
-			"import": "./dist/pathlib.mjs"
+			"import": "./dist/pathlib.mjs",
+			"require": "./dist/pathlib.cjs"
 		}
 	},
 	"files": [
