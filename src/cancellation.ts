@@ -459,8 +459,7 @@ export class CancellationTokenUtils {
 
 	public static cancellable<T extends any[], R>(fn: (...args: [...T, CancellationToken]) => Promise<R>) {
 		return (...args: T) => {
-			const token = (args[args.length - 1] as CancellationToken) || CancellationToken.None;
-			return fn(...args, token);
+			return fn(...args, CancellationToken.None);
 		};
 	}
 
