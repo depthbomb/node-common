@@ -1,7 +1,7 @@
 import * as os from 'node:os';
 import * as path from 'node:path';
 import * as fs from 'node:fs/promises';
-import { Path } from '../dist/pathlib.mjs';
+import { Path } from '../src/pathlib';
 import { it, expect, describe } from 'vitest';
 
 async function withTempDir(run: (dir: string) => Promise<void>): Promise<void> {
@@ -98,6 +98,22 @@ describe('pathlib', () => {
 		});
 	});
 
+	it('supports glob sync APIs', async () => {
+		await withTempDir(async (dir) => {
+			const root = new Path(dir);
+			await root.joinpath('one.txt').writeText('1');
+			await root.joinpath('two.log').writeText('2');
+			await root.joinpath('deep').mkdir();
+			await root.joinpath('deep', 'three.txt').writeText('3');
+
+			const direct = root.globListSync('*.txt').map((p) => p.name).sort();
+			expect(direct).toEqual(['one.txt']);
+
+			const recursive = Array.from(root.rglobSync('*.txt')).map((p) => p.name).sort();
+			expect(recursive).toEqual(['one.txt', 'three.txt']);
+		});
+	});
+
 	it('supports rename, copy, unlink, remove, and touch', async () => {
 		await withTempDir(async (dir) => {
 			const root = new Path(dir);
@@ -124,6 +140,62 @@ describe('pathlib', () => {
 			await removeDir.joinpath('x.txt').writeText('x');
 			await removeDir.remove();
 			expect(await removeDir.exists()).toBe(false);
+		});
+	});
+
+	it('supports copy, move, and replace helpers', async () => {
+		await withTempDir(async (dir) => {
+			const root = new Path(dir);
+			const source = root.joinpath('source.txt');
+			const copyTarget = root.joinpath('copy.txt');
+			const moveTarget = root.joinpath('moved.txt');
+			const replaceTarget = root.joinpath('replace.txt');
+
+			await source.writeText('content');
+			await source.copy(copyTarget);
+			expect(await copyTarget.readText()).toBe('content');
+			expect(await source.exists()).toBe(true);
+
+			await source.move(moveTarget);
+			expect(await moveTarget.exists()).toBe(true);
+			expect(await source.exists()).toBe(false);
+
+			await replaceTarget.writeText('old');
+			await moveTarget.replace(replaceTarget);
+			expect(await replaceTarget.readText()).toBe('content');
+			expect(await moveTarget.exists()).toBe(false);
+		});
+	});
+
+	it('supports ensure helpers and JSON helpers', async () => {
+		await withTempDir(async (dir) => {
+			const nestedFile = new Path(dir, 'a', 'b', 'file.txt');
+			await nestedFile.ensureParentDir();
+			await nestedFile.ensureFile();
+			expect(await nestedFile.exists()).toBe(true);
+
+			const jsonPath = new Path(dir, 'a', 'b', 'data.json');
+			await jsonPath.writeJson({ a: 1, b: ['x'] });
+			expect(await jsonPath.readJson<{ a: number; b: string[] }>()).toEqual({ a: 1, b: ['x'] });
+
+			jsonPath.writeJsonSync({ a: 2 });
+			expect(jsonPath.readJsonSync<{ a: number }>()).toEqual({ a: 2 });
+		});
+	});
+
+	it('supports atomic text/json writes', async () => {
+		await withTempDir(async (dir) => {
+			const textFile = new Path(dir, 'atomic.txt');
+			await textFile.writeTextAtomic('v1');
+			expect(await textFile.readText()).toBe('v1');
+
+			const jsonFile = new Path(dir, 'atomic.json');
+			await jsonFile.writeJsonAtomic({ ok: true });
+			expect(await jsonFile.readJson<{ ok: boolean }>()).toEqual({ ok: true });
+
+			const syncFile = new Path(dir, 'atomic-sync.json');
+			syncFile.writeJsonAtomicSync({ n: 1 });
+			expect(syncFile.readJsonSync<{ n: number }>()).toEqual({ n: 1 });
 		});
 	});
 
@@ -172,6 +244,23 @@ describe('pathlib', () => {
 		expect(path.resolve(roundTrip)).toBe(path.resolve(samplePath));
 	});
 
+	it('supports subpath checks and common path', async () => {
+		await withTempDir(async (dir) => {
+			const root = new Path(dir);
+			const child = root.joinpath('nested', 'file.txt');
+			await child.ensureFile();
+
+			expect(child.isSubPathOf(root)).toBe(true);
+			expect(root.contains(child)).toBe(true);
+
+			const common = Path.commonPath(
+				root.joinpath('nested', 'a.txt'),
+				root.joinpath('nested', 'deeper', 'b.txt')
+			);
+			expect(common.equals(root.joinpath('nested'))).toBe(true);
+		});
+	});
+
 	it('rejects non-file URIs', () => {
 		expect(() => Path.fromUri('https://example.com/test.txt')).toThrow('URI must start with file://');
 	});
@@ -211,6 +300,38 @@ describe('pathlib', () => {
 
 			expect(visitedDirs.sort()).toEqual([path.resolve(dir), path.resolve(nestedDir)].sort());
 			expect(rootFiles).toContain(path.resolve(linkPath));
+		});
+	});
+
+	it('supports walk options', async () => {
+		await withTempDir(async (dir) => {
+			const root = new Path(dir);
+			await root.joinpath('a').mkdir();
+			await root.joinpath('a', 'keep.txt').writeText('x');
+			await root.joinpath('a', 'skip.log').writeText('y');
+			await root.joinpath('a', 'deep').mkdir();
+			await root.joinpath('a', 'deep', 'inside.txt').writeText('z');
+
+			const noDeep: string[] = [];
+			for await (const [current] of root.walk({ maxDepth: 1 })) {
+				noDeep.push(path.relative(dir, current.toString()) || '.');
+			}
+			expect(noDeep).toContain('.');
+			expect(noDeep).toContain('a');
+			expect(noDeep).not.toContain(path.join('a', 'deep'));
+
+			const filteredFiles: string[] = [];
+			for await (const [_current, _dirs, files] of root.walk({
+				filter: (entry) => !entry.name.endsWith('.log'),
+			})) {
+				filteredFiles.push(...files.map((file) => file.name));
+			}
+			expect(filteredFiles).toContain('keep.txt');
+			expect(filteredFiles).not.toContain('skip.log');
+
+			for await (const [_current, dirs] of root.walk({ includeDirs: false, maxDepth: 0 })) {
+				expect(dirs).toEqual([]);
+			}
 		});
 	});
 });

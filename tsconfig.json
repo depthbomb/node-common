@@ -26,6 +26,7 @@
 		"newLine": "lf",
 		"noEmitHelpers": true,
 		"outDir": "dist",
+		"rootDir": "src",
 		"preserveConstEnums": false,
 		"removeComments": false,
 		"sourceMap": true,
@@ -37,6 +38,7 @@
 		"experimentalDecorators": false,
 		"lib": ["ESNext"],
 		"target": "ESNext",
+		"types": ["node"],
 		"useDefineForClassFields": true,
 
 		// Projects
