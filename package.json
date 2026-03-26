@@ -24,6 +24,10 @@
 			"import": "./dist/cancellation.mjs",
 			"require": "./dist/cancellation.cjs"
 		},
+		"./lockfile": {
+			"import": "./dist/lockfile.mjs",
+			"require": "./dist/lockfile.cjs"
+		},
 		"./pathlib": {
 			"import": "./dist/pathlib.mjs",
 			"require": "./dist/pathlib.cjs"

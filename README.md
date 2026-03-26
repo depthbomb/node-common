@@ -44,6 +44,26 @@ try {
 }
 ```
 
+### `lockfile`
+
+Advisory file locking for coordinating exclusive access to shared resources.
+
+```ts
+import { Lockfile } from '@depthbomb/node-common/lockfile';
+
+const lock = await Lockfile.acquire('/tmp/my-resource.lock', {
+	retries: 10,
+	retryDelayMs: 50,
+	staleMs: 60_000,
+});
+
+try {
+	// exclusive work
+} finally {
+	await lock.release();
+}
+```
+
 ### `pathlib`
 
 `Path` is a Node-first path and filesystem helper with async/sync methods for common file and directory workflows.
