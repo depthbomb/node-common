@@ -1,6 +1,6 @@
 import * as os from 'node:os';
-import * as path from 'node:path';
 import * as fsSync from 'node:fs';
+import * as path from 'node:path';
 import * as fs from 'node:fs/promises';
 import * as readline from 'node:readline';
 import { fileURLToPath, pathToFileURL } from 'node:url';
