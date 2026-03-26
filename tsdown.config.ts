@@ -8,7 +8,9 @@ export default defineConfig({
 	format: ['cjs', 'esm'],
 	dts: true,
 	minify: true,
-	skipNodeModulesBundle: true,
+	deps: {
+		skipNodeModulesBundle: true,
+	},
 	target: ['node22'],
 	exports: {
 		packageJson: false,

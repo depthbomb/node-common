@@ -3,9 +3,9 @@ import {
 	CancellationToken,
 	CancellableOperation,
 	CancellationTokenUtils,
-	OperationCancelledError,
 	CancellationTokenSource,
-} from '../src/cancellation';
+	OperationCancelledError
+} from '../dist/cancellation.mjs';
 
 afterEach(() => {
 	vi.useRealTimers();
