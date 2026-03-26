@@ -101,3 +101,21 @@ const pending = execProcess(
 source.cancel('stop');
 await pending;
 ```
+
+### `temp`
+
+Helpers for creating temporary directories/files with explicit cleanup or scoped automatic cleanup.
+
+```ts
+import { createTempDir, createTempFile } from '@depthbomb/node-common/temp';
+
+const tempDir = await createTempDir({ prefix: 'my-app-' });
+await tempDir.path.joinpath('data.txt').writeText('value');
+await tempDir.cleanup();
+
+const tempFile = await createTempFile({ suffix: '.json' });
+await tempFile.use(async (file) => {
+	await file.writeText('{"ok":true}');
+	// file is removed automatically when this callback finishes
+});
+```

@@ -31,6 +31,10 @@
 		"./process": {
 			"import": "./dist/process.mjs",
 			"require": "./dist/process.cjs"
+		},
+		"./temp": {
+			"import": "./dist/temp.mjs",
+			"require": "./dist/temp.cjs"
 		}
 	},
 	"files": [
