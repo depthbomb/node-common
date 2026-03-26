@@ -13,26 +13,6 @@ A set of common utilities for Node.js that I use in my projects.
 
 Cancellation primitives for long-running async work, with AbortSignal interop.
 
-Exports:
-- `CancellationToken`
-- `CancellationTokenSource`
-- `CancellationTokenUtils`
-- `CancellableOperation`
-- `OperationCancelledError`
-- `TimeoutError`
-
-Key APIs:
-- `CancellationToken.fromAbortSignal(signal)`
-- `token.onCancellationRequested(callback)`
-- `token.wrap(() => promise)` / `token.raceMany(promises)` / `token.toPromise()`
-- `token.isCancellationError(error)`
-- `source.toAbortController()`
-- `CancellationTokenUtils.any(...tokens)` / `CancellationTokenUtils.all(...tokens)`
-- `CancellationTokenUtils.throwIfCancelled(token)`
-- `CancellationTokenUtils.withTimeout(promise, ms, token?, { timeoutError: true })`
-
-Example:
-
 ```ts
 import {
 	CancellationToken,
@@ -62,4 +42,34 @@ try {
 		console.error('Timed out');
 	}
 }
+```
+
+### `pathlib`
+
+`Path` is a Node-first path and filesystem helper with async/sync methods for common file and directory workflows.
+
+```ts
+import { Path } from '@depthbomb/node-common/pathlib';
+
+const root = Path.cwd().joinpath('tmp-demo');
+await root.mkdir();
+
+const file = root.joinpath('notes.txt');
+await file.writeText('hello');
+await file.appendText('\nworld');
+
+for await (const line of file.readLines()) {
+	console.log(line);
+}
+
+const txtFiles = await root.globList('*.txt');
+console.log(txtFiles.map((entry) => entry.name));
+
+for await (const [current, dirs, files] of root.walk()) {
+	console.log(current.toString(), dirs.length, files.length);
+}
+
+const uri = file.toUri();
+const fromUri = Path.fromUri(uri);
+console.log(fromUri.equals(file)); // true
 ```
