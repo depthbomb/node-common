@@ -32,6 +32,10 @@
 			"import": "./dist/pathlib.mjs",
 			"require": "./dist/pathlib.cjs"
 		},
+		"./platform": {
+			"import": "./dist/platform.mjs",
+			"require": "./dist/platform.cjs"
+		},
 		"./process": {
 			"import": "./dist/process.mjs",
 			"require": "./dist/process.cjs"

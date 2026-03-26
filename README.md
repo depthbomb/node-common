@@ -94,6 +94,23 @@ const fromUri = Path.fromUri(uri);
 console.log(fromUri.equals(file)); // true
 ```
 
+### `platform`
+
+Runtime/platform detection helpers for Node/Bun environments.
+
+```ts
+import { getRuntimeInfo, assertRuntime } from '@depthbomb/node-common/platform';
+
+assertRuntime(['node', 'bun']);
+
+const info = getRuntimeInfo();
+
+console.log(info.runtime);  // node | bun | unknown
+console.log(info.version);  // runtime version when available
+console.log(info.platform); // win32 | linux | darwin | ...
+console.log(info.arch);     // x64 | arm64 | ...
+```
+
 ### `process`
 
 Process helpers for spawning commands, capturing output, executable lookup, and cancellation-aware execution.
