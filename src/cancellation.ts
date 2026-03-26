@@ -744,12 +744,3 @@ export class CancellableOperation<T = any> {
 		return this.promise;
 	}
 }
-
-export default {
-	CancellationToken,
-	CancellationTokenSource,
-	CancellationTokenUtils,
-	CancellableOperation,
-	OperationCancelledError,
-	TimeoutError,
-};

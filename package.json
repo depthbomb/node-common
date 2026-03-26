@@ -27,6 +27,10 @@
 		"./pathlib": {
 			"import": "./dist/pathlib.mjs",
 			"require": "./dist/pathlib.cjs"
+		},
+		"./process": {
+			"import": "./dist/process.mjs",
+			"require": "./dist/process.cjs"
 		}
 	},
 	"files": [

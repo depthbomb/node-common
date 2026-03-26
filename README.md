@@ -73,3 +73,31 @@ const uri = file.toUri();
 const fromUri = Path.fromUri(uri);
 console.log(fromUri.equals(file)); // true
 ```
+
+### `process`
+
+Process helpers for spawning commands, capturing output, executable lookup, and cancellation-aware execution.
+
+```ts
+import {
+	captureProcess,
+	execProcess,
+	whichSync,
+} from '@depthbomb/node-common/process';
+import { CancellationTokenSource } from '@depthbomb/node-common/cancellation';
+
+const nodePath = whichSync('node');
+console.log(nodePath);
+
+const output = await captureProcess(process.execPath, ['-e', 'console.log("hello")']);
+console.log(output.stdout.trim()); // hello
+
+const source = new CancellationTokenSource();
+const pending = execProcess(
+	process.execPath,
+	['-e', 'setTimeout(() => console.log("done"), 5000)'],
+	{ token: source.token }
+);
+source.cancel('stop');
+await pending;
+```

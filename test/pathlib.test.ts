@@ -1,7 +1,7 @@
 import * as os from 'node:os';
 import * as path from 'node:path';
 import * as fs from 'node:fs/promises';
-import { Path } from '../src/pathlib';
+import { Path } from '../dist/pathlib.mjs';
 import { it, expect, describe } from 'vitest';
 
 async function withTempDir(run: (dir: string) => Promise<void>): Promise<void> {
