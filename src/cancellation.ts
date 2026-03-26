@@ -6,6 +6,10 @@ export type CancellationTokenOptions = {
 	parent?: CancellationToken;
 };
 
+export type WithTimeoutOptions = {
+	timeoutError?: boolean;
+};
+
 export type CancellationTokenRegistration = {
 	readonly token: CancellationToken;
 	unregister(): void;
@@ -20,12 +24,12 @@ export type AsyncCancellationCallback = {
 };
 
 export class OperationCancelledError extends Error {
-	public readonly token: CancellationToken;
+	public readonly token?: CancellationToken;
 
 	constructor(message: string = 'Operation was cancelled', token?: CancellationToken) {
 		super(message);
 		this.name = 'OperationCancelledError';
-		this.token = token!;
+		this.token = token;
 	}
 }
 
@@ -109,6 +113,13 @@ export class CancellationToken extends EventEmitter {
 			};
 		}
 
+		public override onCancellationRequested(_callback: CancellationCallback): CancellationTokenRegistration {
+			return {
+				token: this,
+				unregister(): void {},
+			};
+		}
+
 		public override registerAsync(_callback: AsyncCancellationCallback): CancellationTokenRegistration {
 			return {
 				token: this,
@@ -132,6 +143,18 @@ export class CancellationToken extends EventEmitter {
 			return promise;
 		}
 
+		public override raceMany<T>(promises: Iterable<Promise<T>>): Promise<T> {
+			return Promise.race(Array.from(promises));
+		}
+
+		public override wrap<T>(promiseFactory: () => Promise<T>): Promise<T> {
+			return promiseFactory();
+		}
+
+		public override toPromise(_message?: string): Promise<never> {
+			return new Promise<never>(() => {});
+		}
+
 		public override delay(ms: number): Promise<void> {
 			return new Promise<void>((resolve) => setTimeout(resolve, ms));
 		}
@@ -149,6 +172,10 @@ export class CancellationToken extends EventEmitter {
 		token.cancel('Pre-cancelled token');
 		return token;
 	})();
+
+	public static fromAbortSignal(signal: AbortSignal): CancellationToken {
+		return new CancellationToken({ signal });
+	}
 
 	constructor(options: CancellationTokenOptions = {}) {
 		super();
@@ -230,6 +257,10 @@ export class CancellationToken extends EventEmitter {
 		});
 		this.registrations.add(registration);
 		return registration;
+	}
+
+	public onCancellationRequested(callback: CancellationCallback): CancellationTokenRegistration {
+		return this.register(callback);
 	}
 
 	public registerAsync(callback: AsyncCancellationCallback): CancellationTokenRegistration {
@@ -333,6 +364,38 @@ export class CancellationToken extends EventEmitter {
 		});
 	}
 
+	public raceMany<T>(promises: Iterable<Promise<T>>): Promise<T> {
+		return this.race(Promise.race(Array.from(promises)));
+	}
+
+	public wrap<T>(promiseFactory: () => Promise<T>): Promise<T> {
+		try {
+			return this.race(promiseFactory());
+		} catch (error) {
+			return Promise.reject(error);
+		}
+	}
+
+	public toPromise(message?: string): Promise<never> {
+		if (this.isCancelled) {
+			return Promise.reject(new OperationCancelledError(message || this.cancellationReason, this));
+		}
+
+		return new Promise<never>((_resolve, reject) => {
+			this.register((token) => {
+				reject(new OperationCancelledError(message || token.cancellationReason, token));
+			});
+		});
+	}
+
+	public isCancellationError(error: unknown): error is OperationCancelledError {
+		if (!(error instanceof OperationCancelledError)) {
+			return false;
+		}
+
+		return !error.token || error.token === this;
+	}
+
 	public delay(ms: number): Promise<void> {
 		if (this.isCancelled) {
 			return Promise.reject(new OperationCancelledError(this.cancellationReason, this));
@@ -396,6 +459,9 @@ export class CancellationTokenSource {
 	private tokenInstance: CancellationToken;
 	private isDisposed = false;
 	private readonly linkedTokenRegistrations = new Set<CancellationTokenRegistration>();
+	private abortController?: AbortController;
+	private abortControllerRegistration?: CancellationTokenRegistration;
+	private abortControllerAbortListener?: () => void;
 
 	constructor(options: CancellationTokenOptions = {}) {
 		this.tokenInstance = new CancellationToken(options);
@@ -430,7 +496,32 @@ export class CancellationTokenSource {
 
 		this.isDisposed = true;
 		this.unlinkLinkedTokens();
+		this.detachAbortController();
 		this.tokenInstance.dispose();
+	}
+
+	public toAbortController(): AbortController {
+		this.throwIfDisposed();
+		if (!this.abortController) {
+			const controller = new AbortController();
+			this.abortController = controller;
+
+			if (this.tokenInstance.isCancellationRequested) {
+				controller.abort(this.tokenInstance.cancellationReason);
+			} else {
+				this.abortControllerRegistration = this.tokenInstance.register((token) => {
+					controller.abort(token.cancellationReason);
+				});
+				this.abortControllerAbortListener = () => {
+					if (!this.tokenInstance.isCancellationRequested) {
+						this.cancel('AbortController was aborted');
+					}
+				};
+				controller.signal.addEventListener('abort', this.abortControllerAbortListener, { once: true });
+			}
+		}
+
+		return this.abortController;
 	}
 
 	public static createLinkedTokenSource(...tokens: CancellationToken[]): CancellationTokenSource {
@@ -472,6 +563,18 @@ export class CancellationTokenSource {
 		this.linkedTokenRegistrations.clear();
 	}
 
+	private detachAbortController(): void {
+		if (this.abortControllerRegistration) {
+			this.abortControllerRegistration.unregister();
+			this.abortControllerRegistration = undefined;
+		}
+
+		if (this.abortController && this.abortControllerAbortListener) {
+			this.abortController.signal.removeEventListener('abort', this.abortControllerAbortListener);
+			this.abortControllerAbortListener = undefined;
+		}
+	}
+
 	private throwIfDisposed(): void {
 		if (this.isDisposed) throw new Error('CancellationTokenSource has been disposed');
 	}
@@ -486,11 +589,82 @@ export class CancellationTokenUtils {
 		return source.token;
 	}
 
-	public static withTimeout<T>(promise: Promise<T>, timeoutMs: number, token?: CancellationToken): Promise<T> {
+	public static any(...tokens: CancellationToken[]): CancellationToken {
+		return CancellationTokenUtils.combineTokens(...tokens);
+	}
+
+	public static all(...tokens: CancellationToken[]): CancellationToken {
+		if (tokens.length === 0) return CancellationToken.None;
+		if (tokens.length === 1) return tokens[0];
+
+		const source = new CancellationTokenSource();
+		const cancelledTokens = new Set<CancellationToken>();
+		const registrations = new Set<CancellationTokenRegistration>();
+
+		const cancelIfAllRequested = () => {
+			if (source.isCancellationRequested || cancelledTokens.size !== tokens.length) {
+				return;
+			}
+
+			const reasons = tokens.map((token) => token.cancellationReason || 'Operation was cancelled');
+			source.cancel(`All tokens cancelled: ${reasons.join('; ')}`);
+		};
+
+		const cleanup = () => {
+			for (const registration of registrations) {
+				registration.unregister();
+			}
+			registrations.clear();
+		};
+
+		for (const token of tokens) {
+			if (token.isCancellationRequested) {
+				cancelledTokens.add(token);
+				continue;
+			}
+
+			const registration = token.register((cancelledToken) => {
+				cancelledTokens.add(cancelledToken);
+				cancelIfAllRequested();
+			});
+			registrations.add(registration);
+		}
+
+		source.token.register(() => cleanup());
+		cancelIfAllRequested();
+
+		return source.token;
+	}
+
+	public static throwIfCancelled(token: CancellationToken, message?: string): void {
+		token.throwIfCancellationRequested(message);
+	}
+
+	public static withTimeout<T>(
+		promise: Promise<T>,
+		timeoutMs: number,
+		token?: CancellationToken,
+		options: WithTimeoutOptions = {}
+	): Promise<T> {
 		const timeoutSource = new CancellationTokenSource({ timeout: timeoutMs });
 		const combinedToken = token ? CancellationTokenUtils.combineTokens(token, timeoutSource.token) : timeoutSource.token;
 
-		return combinedToken.race(promise).finally(() => timeoutSource.dispose());
+		return combinedToken.race(promise).catch((error) => {
+			if (!options.timeoutError || !(error instanceof OperationCancelledError)) {
+				throw error;
+			}
+
+			const timeoutCancelledAt = timeoutSource.token.cancellationTime?.getTime();
+			const tokenCancelledAt = token?.cancellationTime?.getTime();
+			const timedOutFirst = timeoutCancelledAt !== undefined
+				&& (tokenCancelledAt === undefined || timeoutCancelledAt <= tokenCancelledAt);
+
+			if (timedOutFirst && timeoutSource.token.isCancellationRequested) {
+				throw new TimeoutError(timeoutMs, error.token ?? timeoutSource.token);
+			}
+
+			throw error;
+		}).finally(() => timeoutSource.dispose());
 	}
 
 	public static cancellable<T extends any[], R>(fn: (...args: [...T, CancellationToken]) => Promise<R>) {

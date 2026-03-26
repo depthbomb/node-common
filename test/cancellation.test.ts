@@ -1,5 +1,6 @@
 import { it, vi, expect, describe, afterEach } from 'vitest';
 import {
+	TimeoutError,
 	CancellationToken,
 	CancellableOperation,
 	CancellationTokenUtils,
@@ -116,6 +117,24 @@ describe('cancellation', () => {
 		expect(combined.isCancellationRequested).toBe(true);
 	});
 
+	it('creates a token from AbortSignal', () => {
+		const controller = new AbortController();
+		const token = CancellationToken.fromAbortSignal(controller.signal);
+		controller.abort();
+
+		expect(token.isCancellationRequested).toBe(true);
+		expect(token.cancellationReason).toBe('AbortSignal was aborted');
+	});
+
+	it('supports onCancellationRequested alias', () => {
+		const token = new CancellationToken();
+		const callback = vi.fn();
+
+		token.onCancellationRequested(callback);
+		token.cancel('alias');
+		expect(callback).toHaveBeenCalledTimes(1);
+	});
+
 	it('supports withTimeout and promisifyWithCancellation', async () => {
 		vi.useFakeTimers();
 
@@ -128,6 +147,73 @@ describe('cancellation', () => {
 			callback(null, value + 1);
 		});
 		await expect(success(1)).resolves.toBe(2);
+	});
+
+	it('supports timeout overload that throws TimeoutError', async () => {
+		vi.useFakeTimers();
+
+		const slow = new Promise<string>((resolve) => setTimeout(() => resolve('late'), 10_000));
+		const timed = CancellationTokenUtils.withTimeout(slow, 100, undefined, { timeoutError: true });
+		vi.advanceTimersByTime(100);
+
+		await expect(timed).rejects.toBeInstanceOf(TimeoutError);
+	});
+
+	it('supports token wrap, raceMany, and toPromise helpers', async () => {
+		const token = new CancellationToken();
+
+		await expect(token.wrap(async () => 'ok')).resolves.toBe('ok');
+		await expect(token.raceMany([
+			Promise.resolve('first'),
+			Promise.resolve('second'),
+		])).resolves.toBe('first');
+
+		const cancelledPromise = token.toPromise();
+		token.cancel('to-promise');
+		await expect(cancelledPromise).rejects.toBeInstanceOf(OperationCancelledError);
+	});
+
+	it('supports cancellation guards and throwIfCancelled helper', () => {
+		const token = new CancellationToken();
+		token.cancel('guard');
+
+		try {
+			CancellationTokenUtils.throwIfCancelled(token);
+		} catch (error) {
+			expect(token.isCancellationError(error)).toBe(true);
+			return;
+		}
+
+		throw new Error('Expected throwIfCancelled to throw');
+	});
+
+	it('supports any/all token composition', () => {
+		const a = new CancellationToken();
+		const b = new CancellationToken();
+		const anyToken = CancellationTokenUtils.any(a, b);
+		const allToken = CancellationTokenUtils.all(a, b);
+
+		a.cancel('a');
+		expect(anyToken.isCancellationRequested).toBe(true);
+		expect(allToken.isCancellationRequested).toBe(false);
+
+		b.cancel('b');
+		expect(allToken.isCancellationRequested).toBe(true);
+		expect(allToken.cancellationReason).toContain('All tokens cancelled');
+	});
+
+	it('supports source-to-AbortController interop', () => {
+		const source = new CancellationTokenSource();
+		const controller = source.toAbortController();
+
+		expect(controller.signal.aborted).toBe(false);
+		source.cancel('source-cancelled');
+		expect(controller.signal.aborted).toBe(true);
+
+		const secondSource = new CancellationTokenSource();
+		const secondController = secondSource.toAbortController();
+		secondController.abort();
+		expect(secondSource.isCancellationRequested).toBe(true);
 	});
 
 	it('supports CancellableOperation completion and cancellation', async () => {
