@@ -245,10 +245,13 @@ export class CancellationToken extends EventEmitter {
 
 	public register(callback: CancellationCallback): CancellationTokenRegistration {
 		if (this.isCancelled) {
-			setImmediate(() => callback(this));
+			let unregistered = false;
+			setImmediate(() => {
+				if (!unregistered) callback(this);
+			});
 			return {
 				token: this,
-				unregister(): void {},
+				unregister(): void { unregistered = true; },
 			};
 		}
 
@@ -265,7 +268,9 @@ export class CancellationToken extends EventEmitter {
 
 	public registerAsync(callback: AsyncCancellationCallback): CancellationTokenRegistration {
 		if (this.isCancelled) {
+			let unregistered = false;
 			setImmediate(async () => {
+				if (unregistered) return;
 				try {
 					await callback(this);
 				} catch (error) {
@@ -274,7 +279,7 @@ export class CancellationToken extends EventEmitter {
 			});
 			return {
 				token: this,
-				unregister(): void {},
+				unregister(): void { unregistered = true; },
 			};
 		}
 
@@ -316,18 +321,31 @@ export class CancellationToken extends EventEmitter {
 
 		this.detachExternalRegistrations();
 
+		const errors: unknown[] = [];
 		for (const child of this.children) {
-			child.cancel('Parent token cancelled');
+			try {
+				child.cancel('Parent token cancelled');
+			} catch (error) {
+				errors.push(error);
+			}
 		}
 		this.children.clear();
 
-		this.emit('cancelled', this);
-
-		for (const registration of this.registrations) {
-			registration.unregister();
+		try {
+			for (const listener of this.rawListeners('cancelled')) {
+				try {
+					(listener as (token: CancellationToken) => void)(this);
+				} catch (error) {
+					errors.push(error);
+				}
+			}
+		} finally {
+			for (const registration of this.registrations) registration.unregister();
+			this.registrations.clear();
+			this.removeAllListeners('cancelled');
 		}
 
-		this.registrations.clear();
+		if (errors.length > 0) throw new AggregateError(errors, 'Cancellation callbacks failed');
 	}
 
 	public createLinkedToken(options: Omit<CancellationTokenOptions, 'parent'> = {}): CancellationToken {
@@ -462,6 +480,7 @@ export class CancellationTokenSource {
 	private abortController?: AbortController;
 	private abortControllerRegistration?: CancellationTokenRegistration;
 	private abortControllerAbortListener?: () => void;
+	private cancelAfterTimer?: NodeJS.Timeout;
 
 	constructor(options: CancellationTokenOptions = {}) {
 		this.tokenInstance = new CancellationToken(options);
@@ -478,13 +497,19 @@ export class CancellationTokenSource {
 
 	public cancel(reason?: string): void {
 		this.throwIfDisposed();
+		this.clearCancelAfterTimer();
 		this.unlinkLinkedTokens();
 		this.tokenInstance.cancel(reason);
 	}
 
 	public cancelAfter(delay: number, reason?: string): void {
 		this.throwIfDisposed();
-		setTimeout(() => {
+		if (!Number.isFinite(delay) || delay < 0) {
+			throw new RangeError('Cancellation delay must be a finite non-negative number');
+		}
+		this.clearCancelAfterTimer();
+		this.cancelAfterTimer = setTimeout(() => {
+			this.cancelAfterTimer = undefined;
 			if (!this.isDisposed && !this.tokenInstance.isCancellationRequested) {
 				this.cancel(reason || `Cancelled after ${delay}ms delay`);
 			}
@@ -495,6 +520,7 @@ export class CancellationTokenSource {
 		if (this.isDisposed) return;
 
 		this.isDisposed = true;
+		this.clearCancelAfterTimer();
 		this.unlinkLinkedTokens();
 		this.detachAbortController();
 		this.tokenInstance.dispose();
@@ -575,6 +601,13 @@ export class CancellationTokenSource {
 		}
 	}
 
+	private clearCancelAfterTimer(): void {
+		if (this.cancelAfterTimer) {
+			clearTimeout(this.cancelAfterTimer);
+			this.cancelAfterTimer = undefined;
+		}
+	}
+
 	private throwIfDisposed(): void {
 		if (this.isDisposed) throw new Error('CancellationTokenSource has been disposed');
 	}
@@ -594,6 +627,7 @@ export class CancellationTokenUtils {
 	}
 
 	public static all(...tokens: CancellationToken[]): CancellationToken {
+		tokens = [...new Set(tokens)];
 		if (tokens.length === 0) return CancellationToken.None;
 		if (tokens.length === 1) return tokens[0];
 
@@ -705,6 +739,7 @@ export class CancellableOperation<T = any> {
 	private source: CancellationTokenSource;
 	private promise: Promise<T>;
 	private isCompleted = false;
+	private wasCancelled = false;
 
 	constructor(operation: (token: CancellationToken) => Promise<T>, options: CancellationTokenOptions = {}) {
 		this.source = new CancellationTokenSource(options);
@@ -720,7 +755,7 @@ export class CancellableOperation<T = any> {
 	}
 
 	public get isCancelled(): boolean {
-		return this.source.isCancellationRequested;
+		return this.wasCancelled;
 	}
 
 	private async executeOperation(operation: (token: CancellationToken) => Promise<T>): Promise<T> {
@@ -730,6 +765,7 @@ export class CancellableOperation<T = any> {
 			return result;
 		} catch (error) {
 			this.isCompleted = true;
+			this.wasCancelled = this.source.token.isCancellationError(error);
 			throw error;
 		} finally {
 			this.source.dispose();
@@ -737,6 +773,7 @@ export class CancellableOperation<T = any> {
 	}
 
 	public cancel(reason?: string): void {
+		this.wasCancelled = true;
 		this.source.cancel(reason);
 	}
 
