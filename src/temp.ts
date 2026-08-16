@@ -24,9 +24,9 @@ export class TempDir {
 	}
 
 	public static async create(options: TempDirOptions = {}): Promise<TempDir> {
-		const parent = Path.from(options.dir || os.tmpdir());
+		const parent = Path.from(options.dir ?? os.tmpdir());
 		await parent.ensureDir();
-		const prefix = options.prefix || 'node-common-';
+		const prefix = options.prefix ?? 'node-common-';
 		const dir = await fs.mkdtemp(path.join(parent.toString(), prefix));
 		return new TempDir(dir);
 	}
@@ -37,8 +37,8 @@ export class TempDir {
 
 	public async cleanup(): Promise<void> {
 		if (this.cleaned) return;
-		this.cleaned = true;
 		await this.path.remove();
+		this.cleaned = true;
 	}
 
 	public async use<T>(fn: (dir: Path) => Promise<T>): Promise<T> {
@@ -59,20 +59,21 @@ export class TempFile {
 	}
 
 	public static async create(options: TempFileOptions = {}): Promise<TempFile> {
-		const parent = Path.from(options.dir || os.tmpdir());
+		const parent = Path.from(options.dir ?? os.tmpdir());
 		await parent.ensureDir();
 
-		const prefix = options.prefix || 'node-common-';
-		const suffix = options.suffix || '.tmp';
+		const prefix = options.prefix ?? 'node-common-';
+		const suffix = options.suffix ?? '.tmp';
 		const filePath = parent.joinpath(`${prefix}${randomUUID()}${suffix}`);
-		await filePath.ensureFile();
+		const handle = await fs.open(filePath.toString(), 'wx');
+		await handle.close();
 		return new TempFile(filePath);
 	}
 
 	public async cleanup(): Promise<void> {
 		if (this.cleaned) return;
-		this.cleaned = true;
 		await this.path.remove();
+		this.cleaned = true;
 	}
 
 	public async use<T>(fn: (file: Path) => Promise<T>): Promise<T> {
