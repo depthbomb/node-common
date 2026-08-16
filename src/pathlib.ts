@@ -124,6 +124,7 @@ export class Path {
 
 	public get suffixes(): string[] {
 		const name = this.name;
+		if (name.startsWith('.') && !name.slice(1).includes('.')) return [];
 		const parts = name.split('.');
 		if (parts.length <= 1) {
 			return [];
@@ -234,7 +235,7 @@ export class Path {
 
 	public expandUser(): Path {
 		let expanded = this.#path;
-		if (expanded.startsWith('~/') || expanded === '~') {
+		if (expanded.startsWith('~/') || expanded.startsWith('~\\') || expanded === '~') {
 			expanded = expanded.replace(/^~/, os.homedir());
 		}
 
@@ -258,7 +259,7 @@ export class Path {
 		const parentPath = Path.from(parent).absolute();
 		const selfPath = this.absolute();
 		const relative = path.relative(parentPath.toString(), selfPath.toString());
-		return relative !== '' && !relative.startsWith('..') && !path.isAbsolute(relative);
+		return relative !== '' && relative !== '..' && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative);
 	}
 
 	public contains(other: PathLike): boolean {
@@ -281,6 +282,14 @@ export class Path {
 		} catch {
 			return false;
 		}
+	}
+
+	public async lexists(): Promise<boolean> {
+		try { await fs.lstat(this.#path); return true; } catch { return false; }
+	}
+
+	public lexistsSync(): boolean {
+		try { fsSync.lstatSync(this.#path); return true; } catch { return false; }
 	}
 
 	public async isFile(): Promise<boolean> {
@@ -388,6 +397,7 @@ export class Path {
 	public *readLinesSync(encoding: BufferEncoding = 'utf-8'): IterableIterator<string> {
 		const content = this.readTextSync(encoding);
 		const lines = content.split(/\r?\n/);
+		if (lines.at(-1) === '') lines.pop();
 		for (const line of lines) {
 			yield line;
 		}
@@ -620,7 +630,12 @@ export class Path {
 			return;
 		}
 
-		const resolvedCurrent = this.absolute().normalizeCaseAware();
+		let resolvedCurrent: string;
+		try {
+			resolvedCurrent = (await this.resolve()).normalizeCaseAware();
+		} catch {
+			resolvedCurrent = this.absolute().normalizeCaseAware();
+		}
 		if (visited.has(resolvedCurrent)) {
 			return;
 		}
@@ -728,7 +743,10 @@ export class Path {
 	public async move(target: PathLike, options: MoveOptions = {}): Promise<Path> {
 		const targetPath = Path.from(target);
 		const overwrite = options.overwrite ?? false;
-		if (overwrite && await targetPath.exists()) {
+		if (!overwrite && await targetPath.lexists()) {
+			throw Object.assign(new Error(`Destination already exists: ${targetPath}`), { code: 'EEXIST' });
+		}
+		if (overwrite && process.platform === 'win32' && await targetPath.exists()) {
 			await targetPath.remove();
 		}
 
@@ -740,8 +758,16 @@ export class Path {
 				throw error;
 			}
 
-			await this.copy(targetPath, { force: overwrite, recursive: true });
-			await this.remove();
+			const staging = targetPath.parent.joinpath(`.move-${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+			try {
+				await this.copy(staging, { force: false, errorOnExist: true, recursive: true });
+				if (overwrite && await targetPath.lexists()) await targetPath.remove();
+				await staging.rename(targetPath);
+				await this.remove();
+			} catch (copyError) {
+				if (await staging.lexists()) await staging.remove();
+				throw copyError;
+			}
 		}
 
 		return targetPath;
@@ -750,7 +776,10 @@ export class Path {
 	public moveSync(target: PathLike, options: MoveOptions = {}): Path {
 		const targetPath = Path.from(target);
 		const overwrite = options.overwrite ?? false;
-		if (overwrite && targetPath.existsSync()) {
+		if (!overwrite && targetPath.lexistsSync()) {
+			throw Object.assign(new Error(`Destination already exists: ${targetPath}`), { code: 'EEXIST' });
+		}
+		if (overwrite && process.platform === 'win32' && targetPath.existsSync()) {
 			targetPath.removeSync();
 		}
 
@@ -762,8 +791,16 @@ export class Path {
 				throw error;
 			}
 
-			this.copySync(targetPath, { force: overwrite, recursive: true });
-			this.removeSync();
+			const staging = targetPath.parent.joinpath(`.move-${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+			try {
+				this.copySync(staging, { force: false, errorOnExist: true, recursive: true });
+				if (overwrite && targetPath.lexistsSync()) targetPath.removeSync();
+				staging.renameSync(targetPath);
+				this.removeSync();
+			} catch (copyError) {
+				if (staging.lexistsSync()) staging.removeSync();
+				throw copyError;
+			}
 		}
 
 		return targetPath;
@@ -796,7 +833,7 @@ export class Path {
 	public async ensureSymlink(target: PathLike, options: EnsureSymlinkOptions = {}): Promise<Path> {
 		const targetPath = Path.from(target);
 		const replace = options.replace ?? true;
-		if (await this.exists()) {
+		if (await this.lexists()) {
 			if (!replace) {
 				return this;
 			}
@@ -811,7 +848,7 @@ export class Path {
 	public ensureSymlinkSync(target: PathLike, options: EnsureSymlinkOptions = {}): Path {
 		const targetPath = Path.from(target);
 		const replace = options.replace ?? true;
-		if (this.existsSync()) {
+		if (this.lexistsSync()) {
 			if (!replace) {
 				return this;
 			}
@@ -886,16 +923,12 @@ export class Path {
 	}
 
 	public match(pattern: string): boolean {
-		const minimatch = (inputPattern: string, str: string): boolean => {
-			const regexPattern = inputPattern
-				.replace(/\./g, '\\.')
-				.replace(/\*/g, '.*')
-				.replace(/\?/g, '.');
-			const regex = new RegExp(`^${regexPattern}$`);
-			return regex.test(str);
-		};
-
-		return minimatch(pattern, this.name);
+		const regexPattern = [...pattern].map((character) => {
+			if (character === '*') return '.*';
+			if (character === '?') return '.';
+			return character.replace(/[\\^$.*+?()[\]{}|]/g, '\\$&');
+		}).join('');
+		return new RegExp(`^${regexPattern}$`).test(this.name);
 	}
 
 	public toUri(): string {
