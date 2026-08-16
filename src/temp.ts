@@ -1,8 +1,9 @@
-import * as path from 'node:path';
 import * as os from 'node:os';
+import * as path from 'node:path';
+import { Path } from './pathlib.js';
 import * as fs from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
-import { Path, type PathLike } from './pathlib.js';
+import type { PathLike } from './pathlib.js';
 
 export type TempFileOptions = {
 	prefix?: string;
