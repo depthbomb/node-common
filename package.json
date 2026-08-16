@@ -1,6 +1,6 @@
 {
 	"name": "@depthbomb/node-common",
-	"version": "2.3.0",
+	"version": "2.4.0",
 	"author": "depthbomb",
 	"description": "A set of common utilities and functions for Node.js",
 	"type": "module",
@@ -18,32 +18,74 @@
 	"types": "./dist/index.d.cts",
 	"exports": {
 		".": {
-			"import": { "types": "./dist/index.d.mts", "default": "./dist/index.mjs" },
-			"require": { "types": "./dist/index.d.cts", "default": "./dist/index.cjs" }
+			"import": {
+				"types": "./dist/index.d.mts",
+				"default": "./dist/index.mjs"
+			},
+			"require": {
+				"types": "./dist/index.d.cts",
+				"default": "./dist/index.cjs"
+			}
 		},
 		"./cancellation": {
-			"import": { "types": "./dist/cancellation.d.mts", "default": "./dist/cancellation.mjs" },
-			"require": { "types": "./dist/cancellation.d.cts", "default": "./dist/cancellation.cjs" }
+			"import": {
+				"types": "./dist/cancellation.d.mts",
+				"default": "./dist/cancellation.mjs"
+			},
+			"require": {
+				"types": "./dist/cancellation.d.cts",
+				"default": "./dist/cancellation.cjs"
+			}
 		},
 		"./lockfile": {
-			"import": { "types": "./dist/lockfile.d.mts", "default": "./dist/lockfile.mjs" },
-			"require": { "types": "./dist/lockfile.d.cts", "default": "./dist/lockfile.cjs" }
+			"import": {
+				"types": "./dist/lockfile.d.mts",
+				"default": "./dist/lockfile.mjs"
+			},
+			"require": {
+				"types": "./dist/lockfile.d.cts",
+				"default": "./dist/lockfile.cjs"
+			}
 		},
 		"./pathlib": {
-			"import": { "types": "./dist/pathlib.d.mts", "default": "./dist/pathlib.mjs" },
-			"require": { "types": "./dist/pathlib.d.cts", "default": "./dist/pathlib.cjs" }
+			"import": {
+				"types": "./dist/pathlib.d.mts",
+				"default": "./dist/pathlib.mjs"
+			},
+			"require": {
+				"types": "./dist/pathlib.d.cts",
+				"default": "./dist/pathlib.cjs"
+			}
 		},
 		"./platform": {
-			"import": { "types": "./dist/platform.d.mts", "default": "./dist/platform.mjs" },
-			"require": { "types": "./dist/platform.d.cts", "default": "./dist/platform.cjs" }
+			"import": {
+				"types": "./dist/platform.d.mts",
+				"default": "./dist/platform.mjs"
+			},
+			"require": {
+				"types": "./dist/platform.d.cts",
+				"default": "./dist/platform.cjs"
+			}
 		},
 		"./process": {
-			"import": { "types": "./dist/process.d.mts", "default": "./dist/process.mjs" },
-			"require": { "types": "./dist/process.d.cts", "default": "./dist/process.cjs" }
+			"import": {
+				"types": "./dist/process.d.mts",
+				"default": "./dist/process.mjs"
+			},
+			"require": {
+				"types": "./dist/process.d.cts",
+				"default": "./dist/process.cjs"
+			}
 		},
 		"./temp": {
-			"import": { "types": "./dist/temp.d.mts", "default": "./dist/temp.mjs" },
-			"require": { "types": "./dist/temp.d.cts", "default": "./dist/temp.cjs" }
+			"import": {
+				"types": "./dist/temp.d.mts",
+				"default": "./dist/temp.mjs"
+			},
+			"require": {
+				"types": "./dist/temp.d.cts",
+				"default": "./dist/temp.cjs"
+			}
 		}
 	},
 	"files": [
