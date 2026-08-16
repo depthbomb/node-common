@@ -2,7 +2,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { spawn } from 'node:child_process';
-import { CancellationToken, OperationCancelledError } from './cancellation';
+import { CancellationToken, OperationCancelledError } from './cancellation.js';
 import type { ChildProcess, SpawnOptions } from 'node:child_process';
 
 export type ProcessSignal = NodeJS.Signals | number;

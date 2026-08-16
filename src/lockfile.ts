@@ -1,8 +1,8 @@
 import * as os from 'node:os';
-import { Path } from './pathlib';
+import { Path } from './pathlib.js';
 import * as fs from 'node:fs/promises';
-import { CancellationToken } from './cancellation';
-import type { PathLike } from './pathlib';
+import { CancellationToken } from './cancellation.js';
+import type { PathLike } from './pathlib.js';
 import { randomUUID } from 'node:crypto';
 
 export type LockfileOptions = {

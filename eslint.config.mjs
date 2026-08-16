@@ -33,18 +33,18 @@ export default defineConfig([globalIgnores(["**/dist", "**/node_modules"]), {
 
 	rules: {
 		eqeqeq: "error",
-		"eol-last": "warn",
-		"no-undef": "warn",
-		"no-empty": "warn",
+		"eol-last": "error",
+		"no-undef": "off",
+		"no-empty": "error",
 		"dot-notation": "error",
 		"no-useless-escape": "off",
 		"no-mixed-spaces-and-tabs": "off",
 		"@typescript-eslint/no-extra-semi": "off",
-		"@typescript-eslint/ban-ts-comment": "warn",
-		"@typescript-eslint/no-var-requires": "warn",
+		"@typescript-eslint/ban-ts-comment": "error",
+		"@typescript-eslint/no-var-requires": "error",
 		"@typescript-eslint/no-empty-function": "off",
 		"@typescript-eslint/no-inferrable-types": "off",
-		"@typescript-eslint/no-unused-vars": "warn",
-		"@typescript-eslint/no-explicit-any": "warn"
+		"@typescript-eslint/no-unused-vars": ["error", { "argsIgnorePattern": "^_" }],
+		"@typescript-eslint/no-explicit-any": "off"
 	},
 }]);
