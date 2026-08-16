@@ -2,7 +2,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { spawn } from 'node:child_process';
-import { CancellationToken, CancellationTokenUtils, OperationCancelledError } from './cancellation';
+import { CancellationToken, OperationCancelledError } from './cancellation';
 import type { ChildProcess, SpawnOptions } from 'node:child_process';
 
 export type ProcessSignal = NodeJS.Signals | number;
@@ -47,14 +47,21 @@ export class ProcessExecutionError extends Error {
 	}
 }
 
-function combineToken(token?: CancellationToken, signal?: AbortSignal): CancellationToken | undefined {
-	if (token && signal) {
-		return CancellationTokenUtils.any(token, CancellationToken.fromAbortSignal(signal));
+function createAbortBridge(token?: CancellationToken, signal?: AbortSignal) {
+	const controller = new AbortController();
+	const registration = token?.register(() => controller.abort(token.cancellationReason));
+	const onAbort = () => controller.abort(signal?.reason);
+	if (signal) {
+		if (signal.aborted) onAbort();
+		else signal.addEventListener('abort', onAbort, { once: true });
 	}
-
-	if (token) return token;
-	if (signal) return CancellationToken.fromAbortSignal(signal);
-	return undefined;
+	return {
+		signal: controller.signal,
+		cleanup: () => {
+			registration?.unregister();
+			signal?.removeEventListener('abort', onAbort);
+		},
+	};
 }
 
 function toNodeError(error: unknown): NodeJS.ErrnoException | undefined {
@@ -92,6 +99,7 @@ function quoteIfNeeded(segment: string): string {
 
 function isExecutable(filePath: string): boolean {
 	try {
+		if (!fs.statSync(filePath).isFile()) return false;
 		fs.accessSync(filePath, fs.constants.X_OK);
 		return true;
 	} catch {
@@ -105,13 +113,15 @@ export function spawnProcess(
 	options: SpawnProcessOptions = {}
 ): ChildProcess {
 	const { token, signal, killSignal, ...spawnOptions } = options;
-	const combinedToken = combineToken(token, signal);
-
-	return spawn(command, [...args], {
+	const bridge = createAbortBridge(token, signal);
+	const child = spawn(command, [...args], {
 		...spawnOptions,
-		signal: combinedToken?.toAbortSignal(),
+		signal: bridge.signal,
 		killSignal: killSignal ?? 'SIGTERM',
 	});
+	child.once('close', bridge.cleanup);
+	child.once('error', bridge.cleanup);
+	return child;
 }
 
 export async function captureProcess(
@@ -125,43 +135,43 @@ export async function captureProcess(
 		stdio: 'pipe',
 	});
 
-	let stdout = '';
-	let stderr = '';
+	const stdoutChunks: string[] = [];
+	const stderrChunks: string[] = [];
 
 	if (child.stdout) {
 		child.stdout.setEncoding(encoding);
 		child.stdout.on('data', (chunk) => {
-			stdout += chunk;
+			stdoutChunks.push(chunk);
 		});
 	}
 
 	if (child.stderr) {
 		child.stderr.setEncoding(encoding);
 		child.stderr.on('data', (chunk) => {
-			stderr += chunk;
+			stderrChunks.push(chunk);
 		});
 	}
-
-	if (stdin !== undefined && child.stdin) {
-		child.stdin.write(stdin);
-		child.stdin.end();
-	}
-
-	const combinedToken = combineToken(options.token, options.signal);
 
 	return await new Promise<ProcessOutput>((resolve, reject) => {
-		child.on('error', (error) => {
+		let settled = false;
+		const fail = (error: unknown) => {
+			if (settled) return;
+			settled = true;
 			const nodeError = toNodeError(error);
-			if (combinedToken?.isCancellationRequested || nodeError?.name === 'AbortError') {
-				reject(new OperationCancelledError(combinedToken?.cancellationReason, combinedToken));
+			if (options.token?.isCancellationRequested || options.signal?.aborted || nodeError?.name === 'AbortError') {
+				reject(new OperationCancelledError(options.token?.cancellationReason, options.token));
 				return;
 			}
-
 			reject(error);
-		});
+		};
+		child.once('error', fail);
+		child.stdin?.once('error', fail);
+		if (child.stdin) child.stdin.end(stdin);
 
-		child.on('close', (exitCode, exitSignal) => {
-			resolve(buildOutput(command, args, child.pid, stdout, stderr, exitCode, exitSignal));
+		child.once('close', (exitCode, exitSignal) => {
+			if (settled) return;
+			settled = true;
+			resolve(buildOutput(command, args, child.pid, stdoutChunks.join(''), stderrChunks.join(''), exitCode, exitSignal));
 		});
 	});
 }
@@ -221,5 +231,27 @@ export function whichSync(command: string, options: WhichOptions = {}): string |
 }
 
 export async function which(command: string, options: WhichOptions = {}): Promise<string | undefined> {
-	return whichSync(command, options);
+	const cwd = options.cwd ?? process.cwd();
+	const envPath = options.envPath ?? process.env.PATH ?? '';
+	const windows = os.platform() === 'win32';
+	const extensions = options.extensions ?? (windows
+		? (process.env.PATHEXT || '.EXE;.CMD;.BAT;.COM').split(';')
+		: ['']);
+	const hasPathSeparator = command.includes(path.sep) || command.includes('/');
+	const hasKnownExtension = !windows || extensions.some((ext) => command.toLowerCase().endsWith(ext.toLowerCase()));
+	const candidates = windows && !hasKnownExtension ? extensions.map((ext) => `${command}${ext}`) : [command];
+	const searchDirs = hasPathSeparator ? [''] : envPath.split(path.delimiter).filter(Boolean);
+
+	for (const dir of searchDirs) {
+		for (const candidate of candidates) {
+			const resolved = path.resolve(cwd, dir ? path.join(dir, candidate) : candidate);
+			try {
+				const stats = await fs.promises.stat(resolved);
+				if (!stats.isFile()) continue;
+				if (!windows) await fs.promises.access(resolved, fs.constants.X_OK);
+				return resolved;
+			} catch { /* Try the next candidate. */ }
+		}
+	}
+	return undefined;
 }
