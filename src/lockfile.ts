@@ -3,6 +3,7 @@ import { Path } from './pathlib';
 import * as fs from 'node:fs/promises';
 import { CancellationToken } from './cancellation';
 import type { PathLike } from './pathlib';
+import { randomUUID } from 'node:crypto';
 
 export type LockfileOptions = {
 	retries?: number;
@@ -58,7 +59,12 @@ function createPayload(lockId: string, metadata?: Record<string, unknown>): Lock
 async function readPayload(pathValue: Path): Promise<LockfilePayload | undefined> {
 	try {
 		const content = await pathValue.readText();
-		return JSON.parse(content) as LockfilePayload;
+		const payload: unknown = JSON.parse(content);
+		if (typeof payload !== 'object' || payload === null) return undefined;
+		const value = payload as Partial<LockfilePayload>;
+		if (typeof value.lockId !== 'string' || typeof value.pid !== 'number'
+			|| typeof value.hostname !== 'string' || typeof value.acquiredAt !== 'string') return undefined;
+		return value as LockfilePayload;
 	} catch {
 		return undefined;
 	}
@@ -89,7 +95,7 @@ export class Lockfile {
 		const retryDelayMs = options.retryDelayMs ?? 50;
 		const staleMs = options.staleMs;
 		const token = options.token;
-		const lockId = `${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+		const lockId = randomUUID();
 
 		let attempts = 0;
 		while (true) {
@@ -100,8 +106,12 @@ export class Lockfile {
 				try {
 					const payload = createPayload(lockId, options.metadata);
 					await handle.writeFile(JSON.stringify(payload));
+				} catch (error) {
+					await handle.close().catch(() => undefined);
+					await fs.rm(pathValue.toString(), { force: true }).catch(() => undefined);
+					throw error;
 				} finally {
-					await handle.close();
+					await handle.close().catch(() => undefined);
 				}
 
 				return new Lockfile(pathValue, lockId, options.verifyOwnershipOnRelease ?? true);
@@ -115,8 +125,12 @@ export class Lockfile {
 						const stats = await pathValue.stat();
 						const age = Date.now() - stats.mtimeMs;
 						if (age >= staleMs) {
-							await fs.rm(pathValue.toString(), { force: true });
-							continue;
+							const current = await pathValue.stat();
+							if (current.dev === stats.dev && current.ino === stats.ino
+								&& current.mtimeMs === stats.mtimeMs && current.size === stats.size) {
+								await fs.rm(pathValue.toString());
+								continue;
+							}
 						}
 					} catch {
 						// no-op; proceed with retry flow
@@ -159,7 +173,7 @@ export class Lockfile {
 
 		if (this.verifyOwnershipOnRelease && await this.path.exists()) {
 			const payload = await readPayload(this.path);
-			if (payload && payload.lockId !== this.lockId) {
+			if (!payload || payload.lockId !== this.lockId) {
 				throw new LockfileOwnershipError(this.path);
 			}
 		}
