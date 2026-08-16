@@ -8,7 +8,7 @@ import {
 	getRuntimeInfo,
 	getRuntimeName,
 	getRuntimeVersion
-} from '../dist/platform.mjs';
+} from '../src/platform';
 
 describe('platform', () => {
 	it('reports runtime name and version', () => {

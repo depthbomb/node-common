@@ -6,7 +6,7 @@ import {
 	CancellationTokenUtils,
 	CancellationTokenSource,
 	OperationCancelledError
-} from '../dist/cancellation.mjs';
+} from '../src/cancellation';
 
 afterEach(() => {
 	vi.useRealTimers();
@@ -305,5 +305,28 @@ describe('cancellation', () => {
 		expect(parent.childrenCount).toBe(1);
 		child.cancel('done');
 		expect(parent.childrenCount).toBe(0);
+	});
+
+	it('runs and unregisters every callback when one throws', () => {
+		const token = new CancellationToken();
+		const called = vi.fn();
+		token.register(() => { throw new Error('callback failed'); });
+		token.register(called);
+		expect(() => token.cancel()).toThrow(AggregateError);
+		expect(called).toHaveBeenCalledOnce();
+		expect(token.registrationCount).toBe(0);
+	});
+
+	it('deduplicates tokens in all composition', () => {
+		const token = new CancellationToken();
+		const combined = CancellationTokenUtils.all(token, token);
+		token.cancel();
+		expect(combined.isCancellationRequested).toBe(true);
+	});
+
+	it('does not report successful operations as cancelled', async () => {
+		const operation = new CancellableOperation(async () => 'done');
+		await expect(operation.waitForCompletion()).resolves.toBe('done');
+		expect(operation.isCancelled).toBe(false);
 	});
 });

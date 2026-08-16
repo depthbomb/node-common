@@ -1,8 +1,8 @@
 import * as fs from 'node:fs/promises';
-import { Path } from '../dist/pathlib.mjs';
-import { TempDir } from '../dist/temp.mjs';
+import { Path } from '../src/pathlib';
+import { TempDir } from '../src/temp';
 import { it, expect, describe } from 'vitest';
-import { Lockfile, LockfileOwnershipError, LockfileAlreadyLockedError } from '../dist/lockfile.mjs';
+import { Lockfile, LockfileOwnershipError, LockfileAlreadyLockedError } from '../src/lockfile';
 
 describe('lockfile', () => {
 	it('acquires and releases a lockfile', async () => {
@@ -73,6 +73,19 @@ describe('lockfile', () => {
 
 			await lockPath.writeText(JSON.stringify({ lockId: 'different-owner' }));
 			await expect(first.release()).rejects.toBeInstanceOf(LockfileOwnershipError);
+		} finally {
+			await tempDir.cleanup();
+		}
+	});
+
+	it('fails closed on malformed ownership payloads', async () => {
+		const tempDir = await TempDir.create();
+		try {
+			const lockPath = tempDir.path.joinpath('resource.lock');
+			const lock = await Lockfile.acquire(lockPath);
+			await lockPath.writeText('{broken');
+			await expect(lock.release()).rejects.toBeInstanceOf(LockfileOwnershipError);
+			expect(await lockPath.exists()).toBe(true);
 		} finally {
 			await tempDir.cleanup();
 		}

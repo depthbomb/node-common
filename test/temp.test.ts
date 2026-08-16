@@ -1,6 +1,6 @@
-import { Path } from '../dist/pathlib.mjs';
+import { Path } from '../src/pathlib';
 import { it, expect, describe } from 'vitest';
-import { TempDir, TempFile, createTempDir, createTempFile } from '../dist/temp.mjs';
+import { TempDir, TempFile, createTempDir, createTempFile } from '../src/temp';
 
 describe('temp', () => {
 	it('creates and cleans up temp directories', async () => {

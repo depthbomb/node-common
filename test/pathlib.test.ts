@@ -1,7 +1,7 @@
 import * as os from 'node:os';
 import * as path from 'node:path';
 import * as fs from 'node:fs/promises';
-import { Path } from '../dist/pathlib.mjs';
+import { Path } from '../src/pathlib';
 import { it, expect, describe } from 'vitest';
 
 async function withTempDir(run: (dir: string) => Promise<void>): Promise<void> {
@@ -263,6 +263,23 @@ describe('pathlib', () => {
 
 	it('rejects non-file URIs', () => {
 		expect(() => Path.fromUri('https://example.com/test.txt')).toThrow('URI must start with file://');
+	});
+
+	it('matches regex metacharacters literally and accepts dot-prefixed child names', () => {
+		expect(new Path('file[1].txt').match('file[1].txt')).toBe(true);
+		expect(new Path('root', '..child').isSubPathOf(new Path('root'))).toBe(true);
+		expect(new Path('.env').suffixes).toEqual([]);
+	});
+
+	it('refuses to overwrite an existing move destination', async () => {
+		await withTempDir(async (dir) => {
+			const source = new Path(dir, 'source.txt');
+			const target = new Path(dir, 'target.txt');
+			await source.writeText('new');
+			await target.writeText('old');
+			await expect(source.move(target)).rejects.toMatchObject({ code: 'EEXIST' });
+			expect(await target.readText()).toBe('old');
+		});
 	});
 
 	it('walk does not recurse into symlinked directories', async () => {

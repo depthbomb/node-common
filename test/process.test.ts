@@ -1,6 +1,6 @@
 import { it, expect, describe } from 'vitest';
-import { CancellationTokenSource, OperationCancelledError } from '../dist/cancellation.mjs';
-import { which, whichSync, execProcess, captureProcess, ProcessExecutionError } from '../dist/process.mjs';
+import { CancellationTokenSource, OperationCancelledError } from '../src/cancellation';
+import { which, whichSync, execProcess, captureProcess, ProcessExecutionError } from '../src/process';
 
 describe('process', () => {
 	it('captures stdout/stderr', async () => {
@@ -13,6 +13,14 @@ describe('process', () => {
 		expect(result.exitCode).toBe(0);
 		expect(result.stdout).toContain('out');
 		expect(result.stderr).toContain('err');
+	});
+
+	it('sends EOF when stdin is omitted', async () => {
+		const result = await captureProcess(process.execPath, [
+			'-e',
+			'process.stdin.resume(); process.stdin.on("end", () => console.log("eof"));',
+		]);
+		expect(result.stdout).toContain('eof');
 	});
 
 	it('throws ProcessExecutionError on non-zero exit', async () => {
