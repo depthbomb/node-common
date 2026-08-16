@@ -12,8 +12,6 @@ export default defineConfig({
 		neverBundle: true,
 	},
 	target: ['node22'],
-	exports: {
-		packageJson: false,
-	},
+	exports: false,
 	tsconfig: './tsconfig.json'
 });
