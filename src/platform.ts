@@ -3,8 +3,8 @@ export type RuntimeName = 'node' | 'bun' | 'unknown';
 export type RuntimeInfo = {
 	runtime: RuntimeName;
 	version: string | undefined;
-	platform: NodeJS.Platform;
-	arch: NodeJS.Architecture;
+	platform: NodeJS.Platform | undefined;
+	arch: NodeJS.Architecture | undefined;
 	isNode: boolean;
 	isBun: boolean;
 	isWindows: boolean;
@@ -17,7 +17,7 @@ function hasProcessObject(): boolean {
 }
 
 export function isNodeRuntime(): boolean {
-	return hasProcessObject() && !!process.versions?.node;
+	return hasProcessObject() && !!process.versions?.node && !isBunRuntime();
 }
 
 export function isBunRuntime(): boolean {
@@ -44,8 +44,8 @@ export function getRuntimeVersion(): string | undefined {
 
 export function getRuntimeInfo(): RuntimeInfo {
 	const runtime = getRuntimeName();
-	const platform = hasProcessObject() ? process.platform : 'linux';
-	const arch = hasProcessObject() ? process.arch : 'x64';
+	const platform = hasProcessObject() ? process.platform : undefined;
+	const arch = hasProcessObject() ? process.arch : undefined;
 
 	return {
 		runtime,
@@ -70,5 +70,5 @@ export function assertRuntime(expected: RuntimeName | readonly RuntimeName[]): v
 	throw new Error(`Unsupported runtime: ${actual}. Expected one of: ${allowed.join(', ')}`);
 }
 
-export const platform = hasProcessObject() ? process.platform : 'linux';
-export const arch     = hasProcessObject() ? process.arch : 'x64';
+export const platform = hasProcessObject() ? process.platform : undefined;
+export const arch     = hasProcessObject() ? process.arch : undefined;
