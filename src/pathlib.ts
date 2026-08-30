@@ -88,6 +88,9 @@ function stringifyJson(
 
 export class Path {
 	readonly #path: string;
+	#cachedName?: string;
+	#cachedStem?: string;
+	#cachedSuffix?: string;
 
 	public constructor(...pathSegments: PathLike[]) {
 		if (pathSegments.length === 0) {
@@ -148,11 +151,15 @@ export class Path {
 	}
 
 	public get name(): string {
-		return path.basename(this.#path);
+		this.#cachedName ??= path.basename(this.#path);
+
+		return this.#cachedName;
 	}
 
 	public get suffix(): string {
-		return path.extname(this.#path);
+		this.#cachedSuffix ??= path.extname(this.#path);
+
+		return this.#cachedSuffix;
 	}
 
 	public get suffixes(): string[] {
@@ -167,9 +174,13 @@ export class Path {
 	}
 
 	public get stem(): string {
-		const name = this.name;
-		const ext = this.suffix;
-		return ext ? name.slice(0, -ext.length) : name;
+		if (this.#cachedStem === undefined) {
+			const name = this.name;
+			const ext = this.suffix;
+			this.#cachedStem = ext ? name.slice(0, -ext.length) : name;
+		}
+
+		return this.#cachedStem;
 	}
 
 	public get parent(): Path {
