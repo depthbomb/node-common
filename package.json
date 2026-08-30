@@ -103,6 +103,7 @@
 		"url": "https://github.com/depthbomb/node-common/issues"
 	},
 	"scripts": {
+		"bench": "yarn build && node benchmark/benchmark.mjs",
 		"build": "tsdown",
 		"typecheck": "tsc --noEmit",
 		"dist": "yarn build",
