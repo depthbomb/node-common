@@ -43,13 +43,18 @@ export function getRuntimeVersion(): string | undefined {
 }
 
 export function getRuntimeInfo(): RuntimeInfo {
-	const runtime = getRuntimeName();
-	const platform = hasProcessObject() ? process.platform : undefined;
-	const arch = hasProcessObject() ? process.arch : undefined;
+	const hasProcess = hasProcessObject();
+	const versions = hasProcess
+		? process.versions as NodeJS.ProcessVersions & { bun?: string }
+		: undefined;
+	const runtime = versions?.bun ? 'bun' : versions?.node ? 'node' : 'unknown';
+	const version = runtime === 'bun' ? versions?.bun : runtime === 'node' ? versions?.node : undefined;
+	const platform = hasProcess ? process.platform : undefined;
+	const arch = hasProcess ? process.arch : undefined;
 
 	return {
 		runtime,
-		version: getRuntimeVersion(),
+		version,
 		platform,
 		arch,
 		isNode: runtime === 'node',
