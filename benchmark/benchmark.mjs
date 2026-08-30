@@ -8,6 +8,7 @@ import {
 	CancellationToken,
 	Path,
 	collectStream,
+	getApplicationDirectories,
 	getRuntimeInfo,
 	spawnManaged,
 	watchPath,
@@ -182,6 +183,18 @@ async function main() {
 				const managed = spawnManaged(process.execPath, ['-e', 'process.stdout.write("ok")']);
 				const output = await managed.result;
 				benchmarkSink += output.stdout.length;
+			}
+		}));
+
+		results.push(await measure('Application directory mapping', 100_000, (iterations) => {
+			for (let index = 0; index < iterations; index += 1) {
+				const directories = getApplicationDirectories('benchmark-app', {
+					platform: 'linux',
+					env: {},
+					homeDir: '/home/benchmark',
+					tempDir: '/tmp',
+				});
+				benchmarkSink += directories.cache.toString().length;
 			}
 		}));
 	} finally {

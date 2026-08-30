@@ -9,6 +9,17 @@ A set of common utilities for Node.js that I use in my projects.
 
 ## Modules
 
+### `appdirs`
+
+Cross-platform config, cache, data, state, log, runtime, and temporary directories for Node applications.
+
+```ts
+import { ensureApplicationDirectories } from '@depthbomb/node-common/appdirs';
+
+const directories = await ensureApplicationDirectories('my-tool');
+await directories.config.joinpath('settings.json').writeJson({ enabled: true });
+```
+
 ### `cancellation`
 
 Cancellation primitives for long-running async work, with AbortSignal interop.

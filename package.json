@@ -27,6 +27,16 @@
 				"default": "./dist/index.cjs"
 			}
 		},
+		"./appdirs": {
+			"import": {
+				"types": "./dist/appdirs.d.mts",
+				"default": "./dist/appdirs.mjs"
+			},
+			"require": {
+				"types": "./dist/appdirs.d.cts",
+				"default": "./dist/appdirs.cjs"
+			}
+		},
 		"./cancellation": {
 			"import": {
 				"types": "./dist/cancellation.d.mts",
