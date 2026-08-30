@@ -50,35 +50,30 @@ class TokenRegistration implements CancellationTokenRegistration {
 		private readonly isAsync: boolean = false,
 		private readonly onUnregister?: (registration: TokenRegistration) => void
 	) {
-		if (isAsync) {
-			this.emitter.on('cancelled', this.asyncHandler);
-		} else {
-			this.emitter.on('cancelled', this.syncHandler);
-		}
+		this.emitter.on('cancelled', this.handler);
 	}
 
-	private syncHandler = (token: CancellationToken) => {
-		if (!this.isUnregistered && !this.isAsync) {
-			(this.callback as CancellationCallback)(token);
+	private handler = (token: CancellationToken) => {
+		if (this.isUnregistered) {
+			return;
 		}
-	};
 
-	private asyncHandler = async (token: CancellationToken) => {
-		if (!this.isUnregistered && this.isAsync) {
-			try {
-				await (this.callback as AsyncCancellationCallback)(token);
-			} catch (error) {
+		if (this.isAsync) {
+			void (this.callback as AsyncCancellationCallback)(token).catch((error) => {
 				console.error('Error in async cancellation callback:', error);
-			}
+			});
+
+			return;
 		}
+
+		(this.callback as CancellationCallback)(token);
 	};
 
 	unregister(): void {
 		if (this.isUnregistered) return;
 
 		this.isUnregistered = true;
-		this.emitter.removeListener('cancelled', this.syncHandler);
-		this.emitter.removeListener('cancelled', this.asyncHandler);
+		this.emitter.removeListener('cancelled', this.handler);
 		this.onUnregister?.(this);
 	}
 }
