@@ -630,16 +630,20 @@ export class Path {
 			return;
 		}
 
-		let resolvedCurrent: string;
-		try {
-			resolvedCurrent = (await this.resolve()).normalizeCaseAware();
-		} catch {
-			resolvedCurrent = this.absolute().normalizeCaseAware();
+		if (options.followSymlinks) {
+			let resolvedCurrent: string;
+			try {
+				resolvedCurrent = (await this.resolve()).normalizeCaseAware();
+			} catch {
+				resolvedCurrent = this.absolute().normalizeCaseAware();
+			}
+
+			if (visited.has(resolvedCurrent)) {
+				return;
+			}
+
+			visited.add(resolvedCurrent);
 		}
-		if (visited.has(resolvedCurrent)) {
-			return;
-		}
-		visited.add(resolvedCurrent);
 
 		const includeDirs = options.includeDirs ?? true;
 		const dirs: Path[] = [];
