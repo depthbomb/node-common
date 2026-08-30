@@ -87,6 +87,16 @@
 				"default": "./dist/platform.cjs"
 			}
 		},
+		"./ports": {
+			"import": {
+				"types": "./dist/ports.d.mts",
+				"default": "./dist/ports.mjs"
+			},
+			"require": {
+				"types": "./dist/ports.d.cts",
+				"default": "./dist/ports.cjs"
+			}
+		},
 		"./process": {
 			"import": {
 				"types": "./dist/process.d.mts",

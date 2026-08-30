@@ -139,6 +139,19 @@ console.log(info.platform); // win32 | linux | darwin | ...
 console.log(info.arch);     // x64 | arm64 | ...
 ```
 
+### `ports`
+
+Race-free TCP port and local socket reservations, plus cancellation-aware port readiness checks.
+
+```ts
+import { reserveTcpPort, waitForPort } from '@depthbomb/node-common/ports';
+
+await using reservation = await reserveTcpPort();
+console.log(`Reserved ${reservation.host}:${reservation.port}`);
+
+await waitForPort(reservation.port);
+```
+
 ### `process`
 
 Process helpers for spawning commands, capturing output, executable lookup, and cancellation-aware execution.

@@ -10,6 +10,7 @@ import {
 	collectStream,
 	getApplicationDirectories,
 	getRuntimeInfo,
+	reserveTcpPort,
 	spawnManaged,
 	watchPath,
 	whichSync,
@@ -195,6 +196,14 @@ async function main() {
 					tempDir: '/tmp',
 				});
 				benchmarkSink += directories.cache.toString().length;
+			}
+		}));
+
+		results.push(await measure('TCP port reserve/release', 100, async (iterations) => {
+			for (let index = 0; index < iterations; index += 1) {
+				const reservation = await reserveTcpPort();
+				benchmarkSink += reservation.port;
+				await reservation.release();
 			}
 		}));
 	} finally {
