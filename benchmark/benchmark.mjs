@@ -11,6 +11,7 @@ import {
 	getApplicationDirectories,
 	getRuntimeInfo,
 	reserveTcpPort,
+	writeFileAtomic,
 	spawnManaged,
 	watchPath,
 	whichSync,
@@ -204,6 +205,15 @@ async function main() {
 				const reservation = await reserveTcpPort();
 				benchmarkSink += reservation.port;
 				await reservation.release();
+			}
+		}));
+
+		const atomicTarget = fixture.tree.joinpath('atomic-benchmark.bin');
+		const atomicData = Buffer.alloc(4 * 1024, 1);
+		results.push(await measure('Durable atomic write (4 KiB)', 20, async (iterations) => {
+			for (let index = 0; index < iterations; index += 1) {
+				await writeFileAtomic(atomicTarget, atomicData);
+				benchmarkSink += atomicData.length;
 			}
 		}));
 	} finally {

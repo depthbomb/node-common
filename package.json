@@ -37,6 +37,16 @@
 				"default": "./dist/appdirs.cjs"
 			}
 		},
+		"./atomic": {
+			"import": {
+				"types": "./dist/atomic.d.mts",
+				"default": "./dist/atomic.mjs"
+			},
+			"require": {
+				"types": "./dist/atomic.d.cts",
+				"default": "./dist/atomic.cjs"
+			}
+		},
 		"./cancellation": {
 			"import": {
 				"types": "./dist/cancellation.d.mts",

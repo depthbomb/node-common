@@ -1,4 +1,5 @@
 export * from './appdirs.js';
+export * from './atomic.js';
 export * from './cancellation.js';
 export * from './lockfile.js';
 export * from './lifecycle.js';

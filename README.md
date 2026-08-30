@@ -20,6 +20,19 @@ const directories = await ensureApplicationDirectories('my-tool');
 await directories.config.joinpath('settings.json').writeJson({ enabled: true });
 ```
 
+### `atomic`
+
+Durable atomic file replacement, fingerprints, advisory compare-and-swap, and locked JSON updates.
+
+```ts
+import { updateJsonAtomic, writeFileAtomic } from '@depthbomb/node-common/atomic';
+
+await writeFileAtomic('state.bin', Buffer.from([1, 2, 3]));
+await updateJsonAtomic<{ count: number }>('counter.json', (current) => ({
+	count: (current?.count ?? 0) + 1,
+}));
+```
+
 ### `cancellation`
 
 Cancellation primitives for long-running async work, with AbortSignal interop.
