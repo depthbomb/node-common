@@ -123,8 +123,7 @@ export class ApplicationLifecycle {
 		this.shutdownReasonValue = reason;
 		this.shutdownSignalValue = signal;
 		this.stateValue = 'shutting-down';
-		this.source.cancel(reason);
-		this.shutdownPromise = this.runShutdownHandlers({
+		this.shutdownPromise = this.performShutdown({
 			reason,
 			signal,
 			token: this.token,
@@ -176,6 +175,33 @@ export class ApplicationLifecycle {
 				throw error;
 			});
 		});
+	}
+
+	private async performShutdown(context: ShutdownContext): Promise<void> {
+		let cancellationError: unknown;
+		try {
+			this.source.cancel(context.reason);
+		} catch (error) {
+			cancellationError = error;
+		}
+
+		try {
+			await this.runShutdownHandlers(context);
+		} catch (shutdownError) {
+			if (cancellationError !== undefined) {
+				throw new AggregateError(
+					[cancellationError, shutdownError],
+					'Cancellation callbacks and shutdown handlers failed',
+					{ cause: shutdownError }
+				);
+			}
+
+			throw shutdownError;
+		}
+
+		if (cancellationError !== undefined) {
+			throw cancellationError;
+		}
 	}
 
 	private async runShutdownHandlers(context: ShutdownContext): Promise<void> {

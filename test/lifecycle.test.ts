@@ -43,6 +43,18 @@ describe('lifecycle', () => {
 		expect(completed).toBe(true);
 	});
 
+	it('still runs shutdown handlers when a cancellation callback fails', async () => {
+		const lifecycle = new ApplicationLifecycle({ signals: [] });
+		let cleanedUp = false;
+
+		lifecycle.token.register(() => { throw new Error('cancellation failed'); });
+		lifecycle.onShutdown(() => { cleanedUp = true; });
+
+		await expect(lifecycle.requestShutdown()).rejects.toThrow('Cancellation callbacks failed');
+		expect(cleanedUp).toBe(true);
+		expect(lifecycle.state).toBe('stopped');
+	});
+
 	it('times out shutdown handlers', async () => {
 		const lifecycle = new ApplicationLifecycle({ signals: [], shutdownTimeoutMs: 5 });
 
