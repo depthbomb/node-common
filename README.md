@@ -190,3 +190,15 @@ await tempFile.use(async (file) => {
 	// file is removed automatically when this callback finishes
 });
 ```
+
+### `watch`
+
+Normalized, bounded filesystem change events exposed as a cancellation-aware async iterator.
+
+```ts
+import { watchPath } from '@depthbomb/node-common/watch';
+
+for await (const change of watchPath('.', { recursive: true, debounceMs: 50 })) {
+	console.log(change.type, change.path.toString());
+}
+```

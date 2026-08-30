@@ -106,6 +106,16 @@
 				"types": "./dist/temp.d.cts",
 				"default": "./dist/temp.cjs"
 			}
+		},
+		"./watch": {
+			"import": {
+				"types": "./dist/watch.d.mts",
+				"default": "./dist/watch.mjs"
+			},
+			"require": {
+				"types": "./dist/watch.d.cts",
+				"default": "./dist/watch.cjs"
+			}
 		}
 	},
 	"files": [

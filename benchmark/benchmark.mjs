@@ -9,6 +9,7 @@ import {
 	Path,
 	collectStream,
 	getRuntimeInfo,
+	watchPath,
 	whichSync,
 } from '../dist/index.mjs';
 
@@ -161,6 +162,17 @@ async function main() {
 					lifecycle.onShutdown(() => { benchmarkSink += 1; });
 				}
 				await lifecycle.requestShutdown();
+			}
+		}));
+
+		results.push(await measure('watchPath startup/cancel', 200, async (iterations) => {
+			for (let index = 0; index < iterations; index += 1) {
+				const controller = new AbortController();
+				const iterator = watchPath(fixture.tree, { signal: controller.signal });
+				const pending = iterator.next();
+				controller.abort('benchmark');
+				await pending.catch(() => undefined);
+				benchmarkSink += 1;
 			}
 		}));
 	} finally {
