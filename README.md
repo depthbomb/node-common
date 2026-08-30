@@ -64,6 +64,23 @@ try {
 }
 ```
 
+### `lifecycle`
+
+Application shutdown coordination with OS signal handling, cancellation, LIFO cleanup, and bounded shutdown time.
+
+```ts
+import { ApplicationLifecycle } from '@depthbomb/node-common/lifecycle';
+
+const lifecycle = new ApplicationLifecycle();
+lifecycle.onShutdown(async () => {
+	await server.close();
+});
+
+await lifecycle.run(async (token) => {
+	await runService(token);
+});
+```
+
 ### `pathlib`
 
 `Path` is a Node-first path and filesystem helper with async/sync methods for common file and directory workflows.

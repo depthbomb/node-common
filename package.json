@@ -47,6 +47,16 @@
 				"default": "./dist/lockfile.cjs"
 			}
 		},
+		"./lifecycle": {
+			"import": {
+				"types": "./dist/lifecycle.d.mts",
+				"default": "./dist/lifecycle.mjs"
+			},
+			"require": {
+				"types": "./dist/lifecycle.d.cts",
+				"default": "./dist/lifecycle.cjs"
+			}
+		},
 		"./pathlib": {
 			"import": {
 				"types": "./dist/pathlib.d.mts",

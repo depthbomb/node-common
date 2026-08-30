@@ -4,6 +4,7 @@ import * as path from 'node:path';
 import { performance } from 'node:perf_hooks';
 import { Readable } from 'node:stream';
 import {
+	ApplicationLifecycle,
 	CancellationToken,
 	Path,
 	collectStream,
@@ -150,6 +151,16 @@ async function main() {
 				const chunks = Array.from({ length: 16 }, () => streamChunk);
 				const output = await collectStream(Readable.from(chunks), { encoding: null });
 				benchmarkSink += output.length;
+			}
+		}));
+
+		results.push(await measure('Lifecycle shutdown (5 handlers)', 10_000, async (iterations) => {
+			for (let index = 0; index < iterations; index += 1) {
+				const lifecycle = new ApplicationLifecycle({ signals: [] });
+				for (let handler = 0; handler < 5; handler += 1) {
+					lifecycle.onShutdown(() => { benchmarkSink += 1; });
+				}
+				await lifecycle.requestShutdown();
 			}
 		}));
 	} finally {
