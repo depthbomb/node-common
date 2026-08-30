@@ -177,7 +177,9 @@ export async function* watchPath(
 	validateOptions(options);
 
 	const basePath = Path.from(pathValue);
-	const queue = new AsyncEventQueue<PathChange>(options.maxQueue ?? 2_048, options.overflow ?? 'throw');
+	const maxQueue = options.maxQueue ?? 2_048;
+	const overflow = options.overflow ?? 'throw';
+	const queue = new AsyncEventQueue<PathChange>(maxQueue, overflow);
 	const bridge = createAbortBridge(options);
 	const pending = new Map<string, PathChange>();
 	const debounceMs = options.debounceMs ?? 0;
@@ -203,7 +205,21 @@ export async function* watchPath(
 			return;
 		}
 
-		pending.set(change.path.toString(), change);
+		const key = change.path.toString();
+		if (!pending.has(key) && pending.size >= maxQueue) {
+			if (overflow === 'throw') {
+				queue.fail(new WatchQueueOverflowError(maxQueue));
+
+				return;
+			}
+
+			const oldestKey = pending.keys().next().value;
+			if (oldestKey !== undefined) {
+				pending.delete(oldestKey);
+			}
+		}
+
+		pending.set(key, change);
 		if (!debounceTimer) {
 			debounceTimer = setTimeout(flush, debounceMs);
 			debounceTimer.unref();
