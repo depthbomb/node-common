@@ -178,6 +178,15 @@ export async function writeFileAtomic(
 			mode,
 			signal: bridge.signal,
 		});
+		if (mode !== undefined) {
+			await fs.chmod(tempPath.toString(), mode);
+		}
+
+		options.token?.throwIfCancellationRequested();
+		if (options.signal?.aborted) {
+			throw new OperationCancelledError(String(options.signal.reason ?? 'AbortSignal was aborted'));
+		}
+
 		await fs.rename(tempPath.toString(), targetPath.toString());
 
 		if (options.syncDirectory ?? true) {

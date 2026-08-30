@@ -5,6 +5,10 @@ import { describe, expect, it } from 'vitest';
 import { compareAndSwapFile, fingerprintFile, updateJsonAtomic, writeFileAtomic } from '../src/atomic';
 import { CancellationToken, OperationCancelledError } from '../src/cancellation';
 
+async function removeFixture(root: string): Promise<void> {
+	await rm(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 20 });
+}
+
 describe('atomic files', () => {
 	it('atomically writes text and binary data without temporary residue', async () => {
 		const root = await mkdtemp(path.join(os.tmpdir(), 'node-common-atomic-'));
@@ -17,7 +21,7 @@ describe('atomic files', () => {
 			expect(await readFile(target)).toEqual(Buffer.from([1, 2, 3]));
 			expect(await readdir(root)).toEqual(['data.bin']);
 		} finally {
-			await rm(root, { recursive: true, force: true });
+			await removeFixture(root);
 		}
 	});
 
@@ -32,7 +36,7 @@ describe('atomic files', () => {
 
 			expect((await stat(target)).mode & 0o777).toBe(0o640);
 		} finally {
-			await rm(root, { recursive: true, force: true });
+			await removeFixture(root);
 		}
 	});
 
@@ -49,7 +53,7 @@ describe('atomic files', () => {
 
 			expect(JSON.parse(await readFile(target, 'utf-8'))).toBe(10);
 		} finally {
-			await rm(root, { recursive: true, force: true });
+			await removeFixture(root);
 		}
 	});
 
@@ -67,7 +71,7 @@ describe('atomic files', () => {
 			expect(stale.swapped).toBe(false);
 			expect(await readFile(target, 'utf-8')).toBe('two');
 		} finally {
-			await rm(root, { recursive: true, force: true });
+			await removeFixture(root);
 		}
 	});
 
