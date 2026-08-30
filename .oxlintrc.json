@@ -1,0 +1,28 @@
+{
+	"$schema": "./node_modules/oxlint/configuration_schema.json",
+	"plugins": [
+		"eslint",
+		"typescript"
+	],
+	"categories": {
+		"correctness": "error"
+	},
+	"rules": {
+		"dot-notation": "error",
+		"eqeqeq": "error",
+		"no-empty": "error",
+		"no-undef": "off",
+		"no-useless-escape": "off",
+		"typescript/ban-ts-comment": "error",
+		"typescript/no-empty-function": "off",
+		"typescript/no-explicit-any": "off",
+		"typescript/no-inferrable-types": "off",
+		"typescript/no-require-imports": "error",
+		"typescript/no-unused-vars": [
+			"error",
+			{
+				"argsIgnorePattern": "^_"
+			}
+		]
+	}
+}
