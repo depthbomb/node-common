@@ -41,6 +41,39 @@ type MoveOptions = {
 	overwrite?: boolean;
 };
 
+const MATCH_PATTERN_CACHE_LIMIT = 256;
+const matchPatternCache = new Map<string, RegExp>();
+
+function compileMatchPattern(pattern: string): RegExp {
+	const cached = matchPatternCache.get(pattern);
+	if (cached) {
+		return cached;
+	}
+
+	let regexPattern = '';
+	for (const character of pattern) {
+		if (character === '*') {
+			regexPattern += '.*';
+		} else if (character === '?') {
+			regexPattern += '.';
+		} else {
+			regexPattern += '\\^$.*+?()[]{}|'.includes(character) ? `\\${character}` : character;
+		}
+	}
+
+	const compiled = new RegExp(`^${regexPattern}$`);
+	if (matchPatternCache.size >= MATCH_PATTERN_CACHE_LIMIT) {
+		const oldestPattern = matchPatternCache.keys().next().value;
+		if (oldestPattern !== undefined) {
+			matchPatternCache.delete(oldestPattern);
+		}
+	}
+
+	matchPatternCache.set(pattern, compiled);
+
+	return compiled;
+}
+
 function stringifyJson(
 	value: unknown,
 	replacer: JsonReplacer | undefined,
@@ -927,12 +960,7 @@ export class Path {
 	}
 
 	public match(pattern: string): boolean {
-		const regexPattern = [...pattern].map((character) => {
-			if (character === '*') return '.*';
-			if (character === '?') return '.';
-			return character.replace(/[\\^$.*+?()[\]{}|]/g, '\\$&');
-		}).join('');
-		return new RegExp(`^${regexPattern}$`).test(this.name);
+		return compileMatchPattern(pattern).test(this.name);
 	}
 
 	public toUri(): string {
