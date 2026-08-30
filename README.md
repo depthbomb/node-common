@@ -156,6 +156,23 @@ source.cancel('stop');
 await pending;
 ```
 
+Long-running and piped processes can use bounded capture, live line iteration, timeouts, and explicit tree termination:
+
+```ts
+import { spawnManaged } from '@depthbomb/node-common/process';
+
+const managed = spawnManaged(process.execPath, ['worker.js'], {
+	maxOutputBytes: 10 * 1024 * 1024,
+	timeoutMs: 30_000,
+});
+
+for await (const line of managed.stdoutLines()) {
+	console.log(line);
+}
+
+const result = await managed.result;
+```
+
 ### `streams`
 
 Bounded, cancellation-aware helpers for collecting streams, iterating lines, and running pipelines.

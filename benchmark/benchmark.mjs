@@ -9,6 +9,7 @@ import {
 	Path,
 	collectStream,
 	getRuntimeInfo,
+	spawnManaged,
 	watchPath,
 	whichSync,
 } from '../dist/index.mjs';
@@ -173,6 +174,14 @@ async function main() {
 				controller.abort('benchmark');
 				await pending.catch(() => undefined);
 				benchmarkSink += 1;
+			}
+		}));
+
+		results.push(await measure('Managed process capture', 10, async (iterations) => {
+			for (let index = 0; index < iterations; index += 1) {
+				const managed = spawnManaged(process.execPath, ['-e', 'process.stdout.write("ok")']);
+				const output = await managed.result;
+				benchmarkSink += output.stdout.length;
 			}
 		}));
 	} finally {

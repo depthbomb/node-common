@@ -1,6 +1,16 @@
 import { it, expect, describe } from 'vitest';
-import { CancellationTokenSource, OperationCancelledError } from '../src/cancellation';
-import { which, whichSync, execProcess, captureProcess, ProcessExecutionError } from '../src/process';
+import { CancellationTokenSource, OperationCancelledError, TimeoutError } from '../src/cancellation';
+import {
+	ProcessExecutionError,
+	ProcessOutputLimitError,
+	captureProcess,
+	execPipeline,
+	execProcess,
+	execWithTimeout,
+	spawnManaged,
+	which,
+	whichSync,
+} from '../src/process';
 
 describe('process', () => {
 	it('captures stdout/stderr', async () => {
@@ -46,5 +56,44 @@ describe('process', () => {
 
 		setTimeout(() => source.cancel('stop-process'), 50);
 		await expect(pending).rejects.toBeInstanceOf(OperationCancelledError);
+	});
+
+	it('manages bounded output and live line iteration', async () => {
+		const managed = spawnManaged(process.execPath, ['-e', 'console.log("first"); console.log("second")']);
+		const lines: string[] = [];
+
+		for await (const line of managed.stdoutLines()) {
+			lines.push(line);
+		}
+
+		const output = await managed.result;
+
+		expect(lines).toEqual(['first', 'second']);
+		expect(output.stdout).toBe('first\nsecond\n');
+
+		await expect(spawnManaged(process.execPath, ['-e', 'process.stdout.write("12345")'], {
+			maxOutputBytes: 4,
+		}).result).rejects.toBeInstanceOf(ProcessOutputLimitError);
+	});
+
+	it('times out managed execution', async () => {
+		await expect(execWithTimeout(
+			process.execPath,
+			['-e', 'setTimeout(() => {}, 1000)'],
+			10
+		)).rejects.toBeInstanceOf(TimeoutError);
+	});
+
+	it('runs shell-free process pipelines', async () => {
+		const outputs = await execPipeline([
+			{ command: process.execPath, args: ['-e', 'process.stdout.write("x".repeat(262144))'] },
+			{
+				command: process.execPath,
+				args: ['-e', 'let size=0;process.stdin.on("data",c=>size+=c.length);process.stdin.on("end",()=>console.log(size))'],
+			},
+		]);
+
+		expect(outputs).toHaveLength(2);
+		expect(outputs[1].stdout.trim()).toBe('262144');
 	});
 });
