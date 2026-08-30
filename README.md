@@ -139,6 +139,23 @@ source.cancel('stop');
 await pending;
 ```
 
+### `streams`
+
+Bounded, cancellation-aware helpers for collecting streams, iterating lines, and running pipelines.
+
+```ts
+import { createReadStream } from 'node:fs';
+import { collectStream, iterateLines } from '@depthbomb/node-common/streams';
+
+const content = await collectStream(createReadStream('notes.txt'), {
+	maxBytes: 10 * 1024 * 1024,
+});
+
+for await (const line of iterateLines(createReadStream('notes.txt'))) {
+	console.log(line);
+}
+```
+
 ### `temp`
 
 Helpers for creating temporary directories/files with explicit cleanup or scoped automatic cleanup.

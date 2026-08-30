@@ -77,6 +77,16 @@
 				"default": "./dist/process.cjs"
 			}
 		},
+		"./streams": {
+			"import": {
+				"types": "./dist/streams.d.mts",
+				"default": "./dist/streams.mjs"
+			},
+			"require": {
+				"types": "./dist/streams.d.cts",
+				"default": "./dist/streams.cjs"
+			}
+		},
 		"./temp": {
 			"import": {
 				"types": "./dist/temp.d.mts",

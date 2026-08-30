@@ -2,9 +2,11 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { performance } from 'node:perf_hooks';
+import { Readable } from 'node:stream';
 import {
 	CancellationToken,
 	Path,
+	collectStream,
 	getRuntimeInfo,
 	whichSync,
 } from '../dist/index.mjs';
@@ -139,6 +141,15 @@ async function main() {
 				for await (const [, directories, files] of fixture.tree.walk()) {
 					benchmarkSink += directories.length + files.length;
 				}
+			}
+		}));
+
+		const streamChunk = Buffer.alloc(64 * 1024, 1);
+		results.push(await measure('collectStream (1 MiB)', 50, async (iterations) => {
+			for (let index = 0; index < iterations; index += 1) {
+				const chunks = Array.from({ length: 16 }, () => streamChunk);
+				const output = await collectStream(Readable.from(chunks), { encoding: null });
+				benchmarkSink += output.length;
 			}
 		}));
 	} finally {
