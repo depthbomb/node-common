@@ -12,7 +12,7 @@ Performance changes should only be retained when they are repeatable and meaning
 
 ## Optimization results
 
-These results were measured on Node v24.17.0 on Windows x64. The baseline (`9b0840f`) and optimized implementation (`eef6eba`) were built and run in separate worktrees on the same warmed host. Each value is the median of nine samples.
+These results were measured on Node v24.17.0 on Windows x64. The baseline (`03981f8`) and optimized implementation (`69616f6`) were built and run in separate worktrees on the same warmed host. Each value is the median of nine samples.
 
 | Benchmark | Baseline | Optimized | Change |
 | --- | ---: | ---: | ---: |
