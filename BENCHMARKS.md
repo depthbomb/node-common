@@ -24,3 +24,19 @@ These results were measured on Node v24.17.0 on Windows x64. The baseline (`0398
 | Path walk (40 dirs, 400 files) | 73 ops/s | 154 ops/s | 2.11x |
 
 Unchanged control cases (`Path` construction and `joinpath`) remained within 1% of baseline. The executable lookup result was treated as filesystem noise because its implementation did not change.
+
+## Feature baselines
+
+The following baselines were recorded after adding the Node resource-management features. They were measured on Node v24.17.0 on Windows x64 using the same median-of-nine methodology.
+
+| Benchmark | Throughput |
+| --- | ---: |
+| collectStream (1 MiB) | 2,947 ops/s |
+| Lifecycle shutdown (5 handlers) | 277,853 ops/s |
+| watchPath startup/cancel | 7,733 ops/s |
+| Managed process capture | 18 ops/s |
+| Application directory mapping | 70,757 ops/s |
+| TCP port reserve/release | 1,562 ops/s |
+| Durable atomic write (4 KiB) | 230 ops/s |
+
+Managed-process throughput is dominated by starting a fresh Node process. The atomic-write case includes file flush, rename, and parent-directory synchronization; disabling durability options is intentionally not used as the baseline.
