@@ -86,6 +86,94 @@ function stringifyJson(
 	return JSON.stringify(value, replacer ?? null, space);
 }
 
+async function renameReplacing(source: string, target: string, overwrite: boolean): Promise<void> {
+	try {
+		await fs.rename(source, target);
+
+		return;
+	} catch (error) {
+		const replaceDirectory = overwrite
+			&& ['EEXIST', 'ENOTEMPTY', 'EPERM', 'EISDIR', 'ENOTDIR'].includes((error as NodeJS.ErrnoException).code ?? '')
+			&& ((await fs.lstat(source)).isDirectory() || (await fs.lstat(target)).isDirectory());
+		if (!replaceDirectory) {
+			throw error;
+		}
+	}
+
+	const container = await fs.mkdtemp(path.join(path.dirname(target), '.replace-'));
+	const backup = path.join(container, 'original');
+	let backedUp = false;
+	try {
+		await fs.rename(target, backup);
+		backedUp = true;
+		try {
+			await fs.rename(source, target);
+		} catch (error) {
+			try {
+				await fs.rename(backup, target);
+				backedUp = false;
+			} catch (restoreError) {
+				throw new AggregateError([error, restoreError], `Replacement failed; original preserved at ${backup}`);
+			}
+
+			throw error;
+		}
+
+		backedUp = false;
+	} finally {
+		if (!backedUp) {
+			await fs.rm(container, {
+				recursive: true,
+				force: true,
+			});
+		}
+	}
+}
+
+function renameReplacingSync(source: string, target: string, overwrite: boolean): void {
+	try {
+		fsSync.renameSync(source, target);
+
+		return;
+	} catch (error) {
+		const replaceDirectory = overwrite
+			&& ['EEXIST', 'ENOTEMPTY', 'EPERM', 'EISDIR', 'ENOTDIR'].includes((error as NodeJS.ErrnoException).code ?? '')
+			&& (fsSync.lstatSync(source).isDirectory() || fsSync.lstatSync(target).isDirectory());
+		if (!replaceDirectory) {
+			throw error;
+		}
+	}
+
+	const container = fsSync.mkdtempSync(path.join(path.dirname(target), '.replace-'));
+	const backup = path.join(container, 'original');
+	let backedUp = false;
+	try {
+		fsSync.renameSync(target, backup);
+		backedUp = true;
+		try {
+			fsSync.renameSync(source, target);
+		} catch (error) {
+			try {
+				fsSync.renameSync(backup, target);
+				backedUp = false;
+			} catch (restoreError) {
+				throw new AggregateError([error, restoreError], `Replacement failed; original preserved at ${backup}`);
+			}
+
+			throw error;
+		}
+
+		backedUp = false;
+	} finally {
+		if (!backedUp) {
+			fsSync.rmSync(container, {
+				recursive: true,
+				force: true,
+			});
+		}
+	}
+}
+
 export class Path {
 	readonly #path: string;
 	#cachedName?: string;
@@ -790,31 +878,47 @@ export class Path {
 
 	public async move(target: PathLike, options: MoveOptions = {}): Promise<Path> {
 		const targetPath = Path.from(target);
+		const sourceStats = await this.lstat();
+		if (this.equals(targetPath)) {
+			return targetPath;
+		}
+
 		const overwrite = options.overwrite ?? false;
 		if (!overwrite && await targetPath.lexists()) {
-			throw Object.assign(new Error(`Destination already exists: ${targetPath}`), { code: 'EEXIST' });
+			throw Object.assign(new Error(`Destination already exists: ${targetPath}`), {
+				code: 'EEXIST',
+			});
 		}
-		if (overwrite && process.platform === 'win32' && await targetPath.exists()) {
-			await targetPath.remove();
+
+		if (targetPath.contains(this) || (sourceStats.isDirectory() && this.contains(targetPath))) {
+			throw Object.assign(new Error('Cannot move between overlapping paths'), {
+				code: 'EINVAL',
+			});
 		}
 
 		try {
-			await fs.rename(this.#path, targetPath.toString());
+			await renameReplacing(this.#path, targetPath.toString(), overwrite);
 		} catch (error) {
-			const nodeError = error as NodeJS.ErrnoException;
-			if (nodeError.code !== 'EXDEV') {
+			const crossDevice = (error as NodeJS.ErrnoException).code === 'EXDEV';
+			if (!crossDevice) {
 				throw error;
 			}
 
-			const staging = targetPath.parent.joinpath(`.move-${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+			const container = await fs.mkdtemp(targetPath.parent.joinpath('.move-').toString());
+			const staging = new Path(container, 'content');
 			try {
-				await this.copy(staging, { force: false, errorOnExist: true, recursive: true });
-				if (overwrite && await targetPath.lexists()) await targetPath.remove();
-				await staging.rename(targetPath);
+				await this.copy(staging, {
+					force: false,
+					errorOnExist: true,
+					recursive: true,
+				});
+				await staging.move(targetPath, options);
 				await this.remove();
-			} catch (copyError) {
-				if (await staging.lexists()) await staging.remove();
-				throw copyError;
+			} finally {
+				await fs.rm(container, {
+					recursive: true,
+					force: true,
+				});
 			}
 		}
 
@@ -823,31 +927,47 @@ export class Path {
 
 	public moveSync(target: PathLike, options: MoveOptions = {}): Path {
 		const targetPath = Path.from(target);
+		const sourceStats = this.lstatSync();
+		if (this.equals(targetPath)) {
+			return targetPath;
+		}
+
 		const overwrite = options.overwrite ?? false;
 		if (!overwrite && targetPath.lexistsSync()) {
-			throw Object.assign(new Error(`Destination already exists: ${targetPath}`), { code: 'EEXIST' });
+			throw Object.assign(new Error(`Destination already exists: ${targetPath}`), {
+				code: 'EEXIST',
+			});
 		}
-		if (overwrite && process.platform === 'win32' && targetPath.existsSync()) {
-			targetPath.removeSync();
+
+		if (targetPath.contains(this) || (sourceStats.isDirectory() && this.contains(targetPath))) {
+			throw Object.assign(new Error('Cannot move between overlapping paths'), {
+				code: 'EINVAL',
+			});
 		}
 
 		try {
-			fsSync.renameSync(this.#path, targetPath.toString());
+			renameReplacingSync(this.#path, targetPath.toString(), overwrite);
 		} catch (error) {
-			const nodeError = error as NodeJS.ErrnoException;
-			if (nodeError.code !== 'EXDEV') {
+			const crossDevice = (error as NodeJS.ErrnoException).code === 'EXDEV';
+			if (!crossDevice) {
 				throw error;
 			}
 
-			const staging = targetPath.parent.joinpath(`.move-${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+			const container = fsSync.mkdtempSync(targetPath.parent.joinpath('.move-').toString());
+			const staging = new Path(container, 'content');
 			try {
-				this.copySync(staging, { force: false, errorOnExist: true, recursive: true });
-				if (overwrite && targetPath.lexistsSync()) targetPath.removeSync();
-				staging.renameSync(targetPath);
+				this.copySync(staging, {
+					force: false,
+					errorOnExist: true,
+					recursive: true,
+				});
+				staging.moveSync(targetPath, options);
 				this.removeSync();
-			} catch (copyError) {
-				if (staging.lexistsSync()) staging.removeSync();
-				throw copyError;
+			} finally {
+				fsSync.rmSync(container, {
+					recursive: true,
+					force: true,
+				});
 			}
 		}
 
@@ -855,19 +975,15 @@ export class Path {
 	}
 
 	public async replace(target: PathLike): Promise<Path> {
-		const targetPath = Path.from(target);
-		if (await targetPath.exists()) {
-			await targetPath.remove();
-		}
-		return await this.move(targetPath, { overwrite: true });
+		return await this.move(target, {
+			overwrite: true,
+		});
 	}
 
 	public replaceSync(target: PathLike): Path {
-		const targetPath = Path.from(target);
-		if (targetPath.existsSync()) {
-			targetPath.removeSync();
-		}
-		return this.moveSync(targetPath, { overwrite: true });
+		return this.moveSync(target, {
+			overwrite: true,
+		});
 	}
 
 	public async symlink(target: PathLike): Promise<void> {
