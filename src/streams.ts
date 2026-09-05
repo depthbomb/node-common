@@ -172,8 +172,9 @@ export async function* iterateLines(
 				newlineIndex = buffered.indexOf('\n');
 			}
 
-			if (options.maxLineLength !== undefined && buffered.length > options.maxLineLength) {
-				throw new LineLimitExceededError(options.maxLineLength, buffered.length);
+			const pendingLength = buffered.length - (buffered.endsWith('\r') ? 1 : 0);
+			if (options.maxLineLength !== undefined && pendingLength > options.maxLineLength) {
+				throw new LineLimitExceededError(options.maxLineLength, pendingLength);
 			}
 		}
 

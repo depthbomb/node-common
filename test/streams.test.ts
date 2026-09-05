@@ -10,6 +10,27 @@ import {
 } from '../src/streams';
 
 describe('streams', () => {
+	it('applies line limits consistently across every CRLF split', async () => {
+		for (const text of ['abc\r\n', '\r\n']) {
+			const limit = text.length - 2;
+			for (let split = 0; split <= text.length; split += 1) {
+				const lines: string[] = [];
+				for await (const line of iterateLines(Readable.from([text.slice(0, split), text.slice(split)]), {
+					maxLineLength: limit,
+				})) {
+					lines.push(line);
+				}
+
+				expect(lines).toEqual([text.slice(0, -2)]);
+			}
+		}
+
+		const unterminated = iterateLines(Readable.from(['abc\r']), {
+			maxLineLength: 3,
+		});
+		await expect(unterminated.next()).rejects.toBeInstanceOf(LineLimitExceededError);
+	});
+
 	it('rejects pre-cancelled ready streams without consuming their data', async () => {
 		const source = Readable.from(['ready']);
 		await expect(collectStream(source, {
