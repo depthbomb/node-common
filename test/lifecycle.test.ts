@@ -2,6 +2,27 @@ import { describe, expect, it } from 'vitest';
 import { ApplicationLifecycle, ShutdownTimeoutError } from '../src/lifecycle';
 
 describe('lifecycle', () => {
+	it('shares the original shutdown promise during synchronous reentry', async () => {
+		const lifecycle = new ApplicationLifecycle({
+			signals: [],
+		});
+		const promises: Promise<void>[] = [];
+		let calls = 0;
+		lifecycle.token.register(() => {
+			promises.push(lifecycle.requestShutdown('callback'));
+		});
+		lifecycle.onShutdown(() => {
+			calls += 1;
+			promises.push(lifecycle.requestShutdown('handler'));
+		});
+
+		const original = lifecycle.requestShutdown('original');
+		await original;
+		expect(calls).toBe(1);
+		expect(promises).toEqual([original, original]);
+		expect(lifecycle.shutdownReason).toBe('original');
+	});
+
 	it('runs shutdown handlers in reverse order and only once', async () => {
 		const lifecycle = new ApplicationLifecycle({ signals: [] });
 		const calls: number[] = [];

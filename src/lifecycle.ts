@@ -123,11 +123,17 @@ export class ApplicationLifecycle {
 		this.shutdownReasonValue = reason;
 		this.shutdownSignalValue = signal;
 		this.stateValue = 'shutting-down';
-		this.shutdownPromise = this.performShutdown({
+		let resolve!: () => void;
+		let reject!: (error: unknown) => void;
+		this.shutdownPromise = new Promise<void>((onResolve, onReject) => {
+			resolve = onResolve;
+			reject  = onReject;
+		});
+		void this.performShutdown({
 			reason,
 			signal,
 			token: this.token,
-		});
+		}).then(resolve, reject);
 
 		return this.shutdownPromise;
 	}
