@@ -1,7 +1,7 @@
-import { Readable } from 'node:stream';
-import { performance } from 'node:perf_hooks';
 import { resolve } from 'node:path';
+import { Readable } from 'node:stream';
 import { pathToFileURL } from 'node:url';
+import { performance } from 'node:perf_hooks';
 
 const { iterateLines, spawnManaged } = await import(pathToFileURL(resolve(process.argv[2] ?? 'dist', 'index.mjs')).href);
 const samples = 7;

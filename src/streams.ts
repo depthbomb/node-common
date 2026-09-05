@@ -1,9 +1,10 @@
-import { LineBuffer } from './internal/line-buffer.js';
-import { StringDecoder } from 'node:string_decoder';
 import { addAbortSignal } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
-import { CancellationToken, OperationCancelledError } from './cancellation.js';
-import type { Readable, Stream } from 'node:stream';
+import { StringDecoder } from 'node:string_decoder';
+import { LineBuffer } from './internal/line-buffer.js';
+import { OperationCancelledError } from './cancellation.js';
+import type { Stream, Readable } from 'node:stream';
+import type { CancellationToken } from './cancellation.js';
 
 export type StreamCancellationOptions = {
 	token?: CancellationToken;

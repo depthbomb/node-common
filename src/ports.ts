@@ -1,10 +1,11 @@
-import * as fs from 'node:fs/promises';
-import * as net from 'node:net';
 import * as os from 'node:os';
+import * as net from 'node:net';
 import * as path from 'node:path';
+import * as fs from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
-import { CancellationToken, OperationCancelledError, TimeoutError } from './cancellation.js';
+import { TimeoutError, OperationCancelledError } from './cancellation.js';
 import type { PathLike } from './pathlib.js';
+import type { CancellationToken } from './cancellation.js';
 
 export type TcpPortReservationOptions = {
 	host?: string;

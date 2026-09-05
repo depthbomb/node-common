@@ -2,8 +2,8 @@ import * as os from 'node:os';
 import { Path } from './pathlib.js';
 import * as fs from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
-import { CancellationToken } from './cancellation.js';
 import type { PathLike } from './pathlib.js';
+import type { CancellationToken } from './cancellation.js';
 
 export type LockfileOptions = {
 	retries?: number;

@@ -1,10 +1,11 @@
-import { LineBuffer } from './internal/line-buffer.js';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { spawn } from 'node:child_process';
 import { StringDecoder } from 'node:string_decoder';
-import { CancellationToken, OperationCancelledError, TimeoutError } from './cancellation.js';
+import { LineBuffer } from './internal/line-buffer.js';
+import { TimeoutError, OperationCancelledError } from './cancellation.js';
+import type { CancellationToken } from './cancellation.js';
 import type { ChildProcess, SpawnOptions } from 'node:child_process';
 
 export type ProcessSignal = NodeJS.Signals | number;

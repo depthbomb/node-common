@@ -1,10 +1,10 @@
+import { Path } from './pathlib.js';
 import * as fs from 'node:fs/promises';
+import { Lockfile } from './lockfile.js';
 import { createHash, randomUUID } from 'node:crypto';
 import { CancellationToken, CancellationTokenUtils, OperationCancelledError } from './cancellation.js';
-import { Lockfile } from './lockfile.js';
-import { Path } from './pathlib.js';
 import type { LockfileOptions } from './lockfile.js';
-import type { JsonReplacer, JsonReviver, PathLike } from './pathlib.js';
+import type { PathLike, JsonReviver, JsonReplacer } from './pathlib.js';
 
 export type AtomicFileData = string | Buffer | Uint8Array;
 

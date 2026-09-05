@@ -1,7 +1,8 @@
 import * as fs from 'node:fs';
-import { CancellationToken, OperationCancelledError } from './cancellation.js';
 import { Path } from './pathlib.js';
+import { OperationCancelledError } from './cancellation.js';
 import type { PathLike } from './pathlib.js';
+import type { CancellationToken } from './cancellation.js';
 
 export type PathChangeType = 'create' | 'modify' | 'delete' | 'unknown';
 

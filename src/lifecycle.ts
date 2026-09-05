@@ -1,4 +1,5 @@
-import { CancellationToken, CancellationTokenSource } from './cancellation.js';
+import { CancellationTokenSource } from './cancellation.js';
+import type { CancellationToken } from './cancellation.js';
 
 export type LifecycleState = 'idle' | 'running' | 'shutting-down' | 'stopped';
 
