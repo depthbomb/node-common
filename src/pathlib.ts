@@ -523,6 +523,7 @@ export class Path {
 			}
 		} finally {
 			lines.close();
+			stream.destroy();
 		}
 	}
 
