@@ -89,35 +89,41 @@ function close(server: net.Server): Promise<void> {
 }
 
 function delay(ms: number, options: ReservationCancellation): Promise<void> {
-	if (options.token) {
-		return options.token.delay(ms);
-	}
-
-	const signal = options.signal;
-	if (!signal) {
-		return new Promise((resolve) => setTimeout(resolve, ms));
-	}
+	throwIfCancelled(options);
 
 	return new Promise<void>((resolve, reject) => {
-		const timeoutId = setTimeout(() => {
-			signal.removeEventListener('abort', onAbort);
-			resolve();
-		}, ms);
-		const onAbort = () => {
+		const finish = () => {
 			clearTimeout(timeoutId);
-			reject(new OperationCancelledError(String(signal.reason ?? 'AbortSignal was aborted')));
+			registration?.unregister();
+			options.signal?.removeEventListener('abort', finish);
+			try {
+				throwIfCancelled(options);
+				resolve();
+			} catch (error) {
+				reject(error);
+			}
 		};
-
-		signal.addEventListener('abort', onAbort, { once: true });
-		if (signal.aborted) {
-			onAbort();
-		}
+		const timeoutId = setTimeout(finish, ms);
+		const registration = options.token?.register(finish);
+		options.signal?.addEventListener('abort', finish, {
+			once: true,
+		});
 	});
 }
 
-function canConnect(host: string, port: number, timeoutMs: number): Promise<boolean> {
-	return new Promise<boolean>((resolve) => {
-		const socket = net.createConnection({ host, port });
+function canConnect(
+	host: string,
+	port: number,
+	timeoutMs: number,
+	options: ReservationCancellation
+): Promise<boolean> {
+	throwIfCancelled(options);
+
+	return new Promise<boolean>((resolve, reject) => {
+		const socket = net.createConnection({
+			host,
+			port,
+		});
 		let settled = false;
 		const finish = (connected: boolean) => {
 			if (settled) {
@@ -125,11 +131,23 @@ function canConnect(host: string, port: number, timeoutMs: number): Promise<bool
 			}
 
 			settled = true;
+			clearTimeout(timeoutId);
+			registration?.unregister();
+			options.signal?.removeEventListener('abort', onAbort);
 			socket.destroy();
-			resolve(connected);
+			try {
+				throwIfCancelled(options);
+				resolve(connected);
+			} catch (error) {
+				reject(error);
+			}
 		};
-
-		socket.setTimeout(timeoutMs, () => finish(false));
+		const onAbort = () => finish(false);
+		const timeoutId = setTimeout(onAbort, timeoutMs);
+		const registration = options.token?.register(onAbort);
+		options.signal?.addEventListener('abort', onAbort, {
+			once: true,
+		});
 		socket.once('connect', () => finish(true));
 		socket.once('error', () => finish(false));
 	});
@@ -330,7 +348,18 @@ async function waitForPortState(
 	while (true) {
 		throwIfCancelled(options);
 
-		const open = await canConnect(host, port, connectTimeoutMs);
+		const probeBudget = deadline - Date.now();
+		if (probeBudget <= 0) {
+			throw new TimeoutError(timeoutMs);
+		}
+
+		const open = await canConnect(host, port, Math.min(connectTimeoutMs, probeBudget), options);
+		throwIfCancelled(options);
+
+		if (Date.now() >= deadline) {
+			throw new TimeoutError(timeoutMs);
+		}
+
 		if (open === expectedOpen) {
 			return;
 		}
