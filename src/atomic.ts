@@ -213,9 +213,8 @@ export async function writeFileAtomic(
 	);
 	const bridge = createAbortBridge(options);
 
-	await parentPath.ensureDir();
-
 	try {
+		await parentPath.ensureDir();
 		await fs.writeFile(tempPath.toString(), data, {
 			encoding: options.encoding ?? 'utf-8',
 			flag: 'wx',

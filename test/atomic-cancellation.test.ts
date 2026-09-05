@@ -1,10 +1,27 @@
 import { describe, expect, it, vi } from 'vitest';
-import { updateJsonAtomic, compareAndSwapFile } from '../src/atomic';
+import { getEventListeners } from 'node:events';
+import { updateJsonAtomic, compareAndSwapFile, writeFileAtomic } from '../src/atomic';
 import { CancellationToken, OperationCancelledError } from '../src/cancellation';
 import { Lockfile } from '../src/lockfile';
 import { TempDir } from '../src/temp';
 
 describe('atomic cancellation', () => {
+	it('detaches token and signal listeners after directory setup fails', async () => {
+		await (await TempDir.create()).use(async (root) => {
+			const parent = root.joinpath('file');
+			await parent.writeText('not a directory');
+			const token = new CancellationToken();
+			const controller = new AbortController();
+			await expect(writeFileAtomic(parent.joinpath('child'), 'data', {
+				token,
+				signal: controller.signal,
+				preserveMode: false,
+			})).rejects.toThrow();
+			expect(token.registrationCount).toBe(0);
+			expect(getEventListeners(controller.signal, 'abort')).toHaveLength(0);
+		});
+	});
+
 	it('never invokes an updater for an already-aborted signal', async () => {
 		await (await TempDir.create()).use(async (root) => {
 			const controller = new AbortController();
