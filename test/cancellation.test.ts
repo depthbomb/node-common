@@ -13,6 +13,26 @@ afterEach(() => {
 });
 
 describe('cancellation', () => {
+	it('expires a zero timeout and rejects invalid timer durations', async () => {
+		vi.useFakeTimers();
+		const pending = CancellationTokenUtils.withTimeout(new Promise<void>(() => {}), 0, undefined, {
+			timeoutError: true,
+		});
+		const assertion = expect(pending).rejects.toBeInstanceOf(TimeoutError);
+		await vi.runAllTimersAsync();
+		await assertion;
+		const parent = new CancellationToken();
+		for (const timeout of [-1, NaN, Infinity, 2_147_483_648]) {
+			expect(() => new CancellationToken({
+				parent,
+				timeout,
+			})).toThrow(RangeError);
+		}
+
+		expect(parent.childrenCount).toBe(0);
+		expect(parent.registrationCount).toBe(0);
+	});
+
 	it('unlinks disposed combined tokens from long-lived inputs', () => {
 		const first  = new CancellationToken();
 		const second = new CancellationToken();

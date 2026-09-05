@@ -175,6 +175,12 @@ export class CancellationToken extends EventEmitter {
 	constructor(options: CancellationTokenOptions = {}) {
 		super();
 
+		const invalidTimeout = options.timeout !== undefined
+			&& (!Number.isFinite(options.timeout) || options.timeout < 0 || options.timeout > 2_147_483_647);
+		if (invalidTimeout) {
+			throw new RangeError('Timeout must be between 0 and 2147483647 milliseconds');
+		}
+
 		if (options.parent) {
 			this.parent = options.parent;
 			options.parent.children.add(this);
@@ -186,13 +192,13 @@ export class CancellationToken extends EventEmitter {
 			}
 		}
 
-		if (options.timeout && options.timeout > 0) {
+		if (options.timeout !== undefined && !this.isCancelled) {
 			this.timeoutId = setTimeout(() => {
 				this.cancel(`Operation timed out after ${options.timeout}ms`);
 			}, options.timeout);
 		}
 
-		if (options.signal) {
+		if (options.signal && !this.isCancelled) {
 			if (options.signal.aborted) {
 				this.cancel('AbortSignal was already aborted');
 			} else {
@@ -499,8 +505,8 @@ export class CancellationTokenSource {
 
 	public cancelAfter(delay: number, reason?: string): void {
 		this.throwIfDisposed();
-		if (!Number.isFinite(delay) || delay < 0) {
-			throw new RangeError('Cancellation delay must be a finite non-negative number');
+		if (!Number.isFinite(delay) || delay < 0 || delay > 2_147_483_647) {
+			throw new RangeError('Cancellation delay must be between 0 and 2147483647 milliseconds');
 		}
 		this.clearCancelAfterTimer();
 		this.cancelAfterTimer = setTimeout(() => {
