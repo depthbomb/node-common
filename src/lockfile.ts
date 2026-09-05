@@ -75,6 +75,37 @@ function isAlreadyLockedError(error: unknown): boolean {
 	return nodeError?.code === 'EEXIST';
 }
 
+/**
+ * Serialize acquisition, stale eviction, and ownership-checked release.
+ * The guard is never evicted automatically: after a process dies inside this
+ * short critical section, remove it only after stopping all cooperating clients.
+ * All clients must use this protocol; older versions do not honor the guard.
+ */
+async function withGuard<T>(lockPath: Path, operation: () => Promise<T>): Promise<T> {
+	const guardPath = `${lockPath}.guard`;
+	try {
+		await fs.mkdir(guardPath);
+	} catch (error) {
+		// Windows can report a directory pending deletion as EPERM.
+		const pendingDeletion = process.platform === 'win32' && (error as NodeJS.ErrnoException).code === 'EPERM';
+		if (pendingDeletion) {
+			throw Object.assign(new Error(`Lock guard is unavailable: ${guardPath}`, {
+				cause: error,
+			}), {
+				code: 'EEXIST',
+			});
+		}
+
+		throw error;
+	}
+
+	try {
+		return await operation();
+	} finally {
+		await fs.rmdir(guardPath);
+	}
+}
+
 export class Lockfile {
 	public readonly path: Path;
 	public readonly lockId: string;
@@ -88,65 +119,62 @@ export class Lockfile {
 	}
 
 	public static async acquire(lockPath: PathLike, options: LockfileOptions = {}): Promise<Lockfile> {
-		const pathValue = Path.from(lockPath);
+		const pathValue = Path.from(lockPath).absolute();
 		await pathValue.ensureParentDir();
 
-		const retries = options.retries ?? 0;
-		const retryDelayMs = options.retryDelayMs ?? 50;
-		const staleMs = options.staleMs;
-		const token = options.token;
 		const lockId = randomUUID();
-
 		let attempts = 0;
 		while (true) {
-			token?.throwIfCancellationRequested();
+			options.token?.throwIfCancellationRequested();
 
 			try {
-				const handle = await fs.open(pathValue.toString(), 'wx');
-				try {
-					const payload = createPayload(lockId, options.metadata);
-					await handle.writeFile(JSON.stringify(payload));
-				} catch (error) {
-					await handle.close().catch(() => undefined);
-					await fs.rm(pathValue.toString(), { force: true }).catch(() => undefined);
-					throw error;
-				} finally {
-					await handle.close().catch(() => undefined);
-				}
+				return await withGuard(pathValue, async () => {
+					const staleMs = options.staleMs;
+					if (staleMs !== undefined && staleMs > 0) {
+						try {
+							const stats = await pathValue.stat();
+							const stale = Date.now() - stats.mtimeMs >= staleMs;
+							if (stale) {
+								await fs.rm(pathValue.toString());
+							}
+						} catch (error) {
+							const missing = (error as NodeJS.ErrnoException).code === 'ENOENT';
+							if (!missing) {
+								throw error;
+							}
+						}
+					}
 
-				return new Lockfile(pathValue, lockId, options.verifyOwnershipOnRelease ?? true);
+					options.token?.throwIfCancellationRequested();
+
+					const payload = JSON.stringify(createPayload(lockId, options.metadata));
+					const handle = await fs.open(pathValue.toString(), 'wx');
+					try {
+						await handle.writeFile(payload);
+					} catch (error) {
+						await handle.close().catch(() => undefined);
+						await fs.rm(pathValue.toString(), {
+							force: true,
+						});
+						throw error;
+					} finally {
+						await handle.close().catch(() => undefined);
+					}
+
+					return new Lockfile(pathValue, lockId, options.verifyOwnershipOnRelease ?? true);
+				});
 			} catch (error) {
 				if (!isAlreadyLockedError(error)) {
 					throw error;
 				}
 
-				if (typeof staleMs === 'number' && staleMs > 0) {
-					try {
-						const stats = await pathValue.stat();
-						const age = Date.now() - stats.mtimeMs;
-						if (age >= staleMs) {
-							const current = await pathValue.stat();
-							if (current.dev === stats.dev && current.ino === stats.ino
-								&& current.mtimeMs === stats.mtimeMs && current.size === stats.size) {
-								await fs.rm(pathValue.toString());
-								continue;
-							}
-						}
-					} catch {
-						// no-op; proceed with retry flow
-					}
-				}
-
-				if (attempts >= retries) {
+				const exhausted = attempts >= (options.retries ?? 0);
+				if (exhausted) {
 					throw new LockfileAlreadyLockedError(pathValue);
 				}
 
 				attempts += 1;
-				if (token) {
-					await token.delay(retryDelayMs);
-				} else {
-					await sleep(retryDelayMs);
-				}
+				await (options.token?.delay(options.retryDelayMs ?? 50) ?? sleep(options.retryDelayMs ?? 50));
 			}
 		}
 	}
@@ -169,16 +197,39 @@ export class Lockfile {
 	}
 
 	public async release(): Promise<void> {
-		if (this.released) return;
+		for (let attempt = 0; ; attempt += 1) {
+			if (this.released) {
+				return;
+			}
 
-		if (this.verifyOwnershipOnRelease && await this.path.exists()) {
-			const payload = await readPayload(this.path);
-			if (!payload || payload.lockId !== this.lockId) {
-				throw new LockfileOwnershipError(this.path);
+			try {
+				await withGuard(this.path.absolute(), async () => {
+					if (this.released) {
+						return;
+					}
+
+					if (this.verifyOwnershipOnRelease && await this.path.lexists()) {
+						const payload = await readPayload(this.path);
+						if (!payload || payload.lockId !== this.lockId) {
+							throw new LockfileOwnershipError(this.path);
+						}
+					}
+
+					await fs.rm(this.path.toString(), {
+						force: true,
+					});
+					this.released = true;
+				});
+
+				return;
+			} catch (error) {
+				const retry = isAlreadyLockedError(error) && attempt < 500;
+				if (!retry) {
+					throw error;
+				}
+
+				await sleep(2);
 			}
 		}
-
-		await fs.rm(this.path.toString(), { force: true });
-		this.released = true;
 	}
 }

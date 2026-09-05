@@ -88,6 +88,13 @@ try {
 }
 ```
 
+Acquisition, stale recovery, and release coordinate through a temporary
+`<lock-path>.guard` directory. All cooperating processes must use this locking
+protocol; older versions do not honor the guard. If a process dies while changing
+lock ownership, the guard remains and further attempts fail closed. Stop all
+participating processes before removing an abandoned guard. `staleMs` applies to
+the lockfile, never to the guard.
+
 ### `lifecycle`
 
 Application shutdown coordination with OS signal handling, cancellation, LIFO cleanup, and bounded shutdown time.

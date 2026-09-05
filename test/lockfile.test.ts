@@ -1,10 +1,70 @@
 import * as fs from 'node:fs/promises';
 import { Path } from '../src/pathlib';
 import { TempDir } from '../src/temp';
-import { it, expect, describe } from 'vitest';
+import { afterEach, it, expect, describe, vi } from 'vitest';
 import { Lockfile, LockfileOwnershipError, LockfileAlreadyLockedError } from '../src/lockfile';
 
+vi.mock('node:fs/promises', async (importOriginal) => ({
+	...await importOriginal<typeof fs>(),
+}));
+
+afterEach(() => {
+	vi.restoreAllMocks();
+});
+
 describe('lockfile', () => {
+	it('serializes stale eviction with competing acquisition', async () => {
+		await (await TempDir.create()).use(async (root) => {
+			const path = root.joinpath('stale.lock');
+			await path.writeText('old');
+			const old = new Date(Date.now() - 60_000);
+			await fs.utimes(path.toString(), old, old);
+			let entered!: () => void;
+			let resume!: () => void;
+			const deleting = new Promise<void>((resolve) => { entered = resolve; });
+			const resumed = new Promise<void>((resolve) => { resume = resolve; });
+			const original = fs.rm;
+			vi.spyOn(fs, 'rm').mockImplementation(async (target, options) => {
+				if (String(target) === path.toString()) {
+					entered();
+					await resumed;
+				}
+
+				await original(target, options);
+			});
+			const pending = Lockfile.acquire(path, {
+				staleMs: 30_000,
+			});
+			try {
+				await deleting;
+				await expect(Lockfile.acquire(path, {
+					staleMs: 30_000,
+				})).rejects.toBeInstanceOf(LockfileAlreadyLockedError);
+			} finally {
+				resume();
+			}
+
+			const first = await pending;
+			await expect(Lockfile.acquire(path, {
+				staleMs: 30_000,
+			})).rejects.toBeInstanceOf(LockfileAlreadyLockedError);
+			await Promise.all([first.release(), first.release()]);
+			const next = await Lockfile.acquire(path);
+			await next.release();
+		});
+	});
+
+	it('never evicts an occupied mutation guard', async () => {
+		await (await TempDir.create()).use(async (root) => {
+			const path = root.joinpath('resource.lock');
+			await root.joinpath('resource.lock.guard').mkdir();
+			await expect(Lockfile.acquire(path, {
+				staleMs: 1,
+			})).rejects.toBeInstanceOf(LockfileAlreadyLockedError);
+			expect(await path.exists()).toBe(false);
+		});
+	});
+
 	it('acquires and releases a lockfile', async () => {
 		const tempDir = await TempDir.create();
 		try {
