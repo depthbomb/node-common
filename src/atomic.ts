@@ -1,6 +1,6 @@
 import * as fs from 'node:fs/promises';
 import { createHash, randomUUID } from 'node:crypto';
-import { CancellationToken, OperationCancelledError } from './cancellation.js';
+import { CancellationToken, CancellationTokenUtils, OperationCancelledError } from './cancellation.js';
 import { Lockfile } from './lockfile.js';
 import { Path } from './pathlib.js';
 import type { LockfileOptions } from './lockfile.js';
@@ -154,6 +154,47 @@ function lockOptions(options: LockfileOptions | undefined, token: CancellationTo
 	};
 }
 
+function throwIfCancelled(options: AtomicWriteOptions): void {
+	options.token?.throwIfCancellationRequested();
+	if (options.signal?.aborted) {
+		throw new OperationCancelledError(String(options.signal.reason ?? 'AbortSignal was aborted'));
+	}
+}
+
+async function withAtomicLock<T>(
+	target: Path,
+	options: AtomicWriteOptions & { lock?: LockfileOptions },
+	operation: (token: CancellationToken) => Promise<T>
+): Promise<T> {
+	throwIfCancelled(options);
+
+	const bridge = createAbortBridge(options);
+	const signalToken = CancellationToken.fromAbortSignal(bridge.signal);
+	const token = options.lock?.token
+		? CancellationTokenUtils.any(signalToken, options.lock.token)
+		: signalToken;
+	let lock: Lockfile | undefined;
+	try {
+		lock = await Lockfile.acquire(`${target}.lock`, {
+			...lockOptions(options.lock, token),
+			token,
+		});
+		token.throwIfCancellationRequested();
+
+		return await operation(token);
+	} catch (error) {
+		return mapCancellationError(error, options);
+	} finally {
+		try {
+			await lock?.release();
+		} finally {
+			token.dispose();
+			signalToken.dispose();
+			bridge.cleanup();
+		}
+	}
+}
+
 export async function writeFileAtomic(
 	target: PathLike,
 	data: AtomicFileData,
@@ -257,29 +298,28 @@ export async function compareAndSwapFile(
 	options: CompareAndSwapOptions = {}
 ): Promise<CompareAndSwapResult> {
 	const targetPath = Path.from(target).absolute();
-	const lock = await Lockfile.acquire(`${targetPath}.lock`, lockOptions(options.lock, options.token));
-
-	try {
+	return await withAtomicLock(targetPath, options, async (token) => {
 		const current = await fingerprintFile(targetPath, {
 			algorithm: options.algorithm ?? expected?.algorithm,
 			allowMissing: true,
-			token: options.token,
+			token,
 		});
 
 		if (!fingerprintsEqual(current, expected)) {
 			return { swapped: false, fingerprint: current };
 		}
 
-		await writeFileAtomic(targetPath, data, options);
+		await writeFileAtomic(targetPath, data, {
+			...options,
+			token,
+		});
 		const fingerprint = await fingerprintFile(targetPath, {
 			algorithm: options.algorithm ?? expected?.algorithm,
-			token: options.token,
+			token,
 		});
 
 		return { swapped: true, fingerprint };
-	} finally {
-		await lock.release();
-	}
+	});
 }
 
 export async function updateJsonAtomic<T>(
@@ -288,13 +328,14 @@ export async function updateJsonAtomic<T>(
 	options: UpdateJsonAtomicOptions<T> = {}
 ): Promise<T> {
 	const targetPath = Path.from(target).absolute();
-	const lock = await Lockfile.acquire(`${targetPath}.lock`, lockOptions(options.lock, options.token));
-
-	try {
+	return await withAtomicLock(targetPath, options, async (token) => {
 		let current = options.defaultValue;
 		try {
 			current = JSON.parse(
-				await fs.readFile(targetPath.toString(), options.encoding ?? 'utf-8'),
+				await fs.readFile(targetPath.toString(), {
+					encoding: options.encoding ?? 'utf-8',
+					signal: token.toAbortSignal(),
+				}),
 				options.reviver
 			) as T;
 		} catch (error) {
@@ -303,15 +344,16 @@ export async function updateJsonAtomic<T>(
 			}
 		}
 
-		options.token?.throwIfCancellationRequested();
+		token.throwIfCancellationRequested();
 
 		const updated = await updater(current);
 		const serialized = stringifyJson(updated, options.replacer, options.space ?? 2);
 
-		await writeFileAtomic(targetPath, serialized, options);
+		await writeFileAtomic(targetPath, serialized, {
+			...options,
+			token,
+		});
 
 		return updated;
-	} finally {
-		await lock.release();
-	}
+	});
 }
