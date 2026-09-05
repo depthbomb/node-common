@@ -13,6 +13,21 @@ afterEach(() => {
 });
 
 describe('cancellation', () => {
+	it('aborts exported controllers on disposal even when another callback throws', () => {
+		const source = new CancellationTokenSource();
+		const token = source.token;
+		token.register(() => {
+			throw new Error('callback failed');
+		});
+		const controller = source.toAbortController();
+
+		expect(() => source.dispose()).toThrow(AggregateError);
+		expect(controller.signal.aborted).toBe(true);
+		expect(controller.signal.reason).toBe('Token disposed');
+		expect(token.registrationCount).toBe(0);
+		expect(() => source.dispose()).not.toThrow();
+	});
+
 	it('cancels token with reason and throws on request check', () => {
 		const token = new CancellationToken();
 

@@ -517,8 +517,11 @@ export class CancellationTokenSource {
 		this.isDisposed = true;
 		this.clearCancelAfterTimer();
 		this.unlinkLinkedTokens();
-		this.detachAbortController();
-		this.tokenInstance.dispose();
+		try {
+			this.tokenInstance.dispose();
+		} finally {
+			this.detachAbortController();
+		}
 	}
 
 	public toAbortController(): AbortController {
