@@ -156,8 +156,8 @@ function createAbortBridge(options: WatchPathOptions): {
 	};
 }
 
-function normalizeChange(basePath: Path, rawType: 'change' | 'rename', filename: string | null): PathChange {
-	const changedPath = filename === null ? basePath : basePath.joinpath(filename);
+function normalizeChange(basePath: Path, directory: boolean, rawType: 'change' | 'rename', filename: string | null): PathChange {
+	const changedPath = filename === null || !directory ? basePath : basePath.joinpath(filename);
 	let type: PathChangeType = 'modify';
 
 	if (filename === null) {
@@ -181,6 +181,7 @@ export async function* watchPath(
 	validateOptions(options);
 
 	const basePath = Path.from(pathValue);
+	const directory = basePath.isDirSync();
 	const maxQueue = options.maxQueue ?? 2_048;
 	const overflow = options.overflow ?? 'throw';
 	const queue = new AsyncEventQueue<PathChange>(maxQueue, overflow);
@@ -236,7 +237,7 @@ export async function* watchPath(
 			persistent: options.persistent ?? true,
 			recursive: options.recursive ?? false,
 			signal: bridge.signal,
-		}, (rawType, filename) => enqueue(normalizeChange(basePath, rawType, filename)));
+		}, (rawType, filename) => enqueue(normalizeChange(basePath, directory, rawType, filename)));
 	} catch (error) {
 		bridge.cleanup();
 		throw error;

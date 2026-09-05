@@ -4,12 +4,34 @@ import * as path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { CancellationTokenSource, OperationCancelledError } from '../src/cancellation';
 import { watchPath } from '../src/watch';
+import { TempDir } from '../src/temp';
 
 function delay(ms: number): Promise<void> {
 	return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 describe('watch', () => {
+	it('reports the watched file itself when it changes', async () => {
+		await (await TempDir.create()).use(async (root) => {
+			const file = root.joinpath('watched.txt');
+			await file.writeText('before');
+			const cancellation = new CancellationTokenSource();
+			const iterator = watchPath(file, {
+				token: cancellation.token,
+			});
+			try {
+				const pending = iterator.next();
+				await file.appendText('after');
+				const change = await pending;
+				expect(change.value?.path.equals(file)).toBe(true);
+				expect(change.value?.type).toBe('modify');
+			} finally {
+				cancellation.dispose();
+				await iterator.return();
+			}
+		});
+	});
+
 	it('reports file creation with normalized paths', async () => {
 		const root = await mkdtemp(path.join(os.tmpdir(), 'node-common-watch-'));
 		const cancellation = new CancellationTokenSource();
