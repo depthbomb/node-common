@@ -649,17 +649,22 @@ export class Path {
 
 	public async ensureFile(): Promise<Path> {
 		await this.ensureParentDir();
-		if (!await this.exists()) {
-			await this.writeText('');
+		const exists = await this.exists();
+		if (!exists) {
+			const handle = await fs.open(this.#path, 'a');
+			await handle.close();
 		}
+
 		return this;
 	}
 
 	public ensureFileSync(): Path {
 		this.ensureParentDirSync();
-		if (!this.existsSync()) {
-			this.writeTextSync('');
+		const exists = this.existsSync();
+		if (!exists) {
+			fsSync.closeSync(fsSync.openSync(this.#path, 'a'));
 		}
+
 		return this;
 	}
 
@@ -1051,22 +1056,44 @@ export class Path {
 	}
 
 	public async touch(): Promise<void> {
-		const exists = await this.exists();
-		if (!exists) {
-			await fs.writeFile(this.#path, '');
-		} else {
-			const now = new Date();
+		const now = new Date();
+		try {
 			await fs.utimes(this.#path, now, now);
+
+			return;
+		} catch (error) {
+			const missing = (error as NodeJS.ErrnoException).code === 'ENOENT';
+			if (!missing) {
+				throw error;
+			}
+		}
+
+		const handle = await fs.open(this.#path, 'a');
+		try {
+			await handle.utimes(now, now);
+		} finally {
+			await handle.close();
 		}
 	}
 
 	public touchSync(): void {
-		const exists = this.existsSync();
-		if (!exists) {
-			fsSync.writeFileSync(this.#path, '');
-		} else {
-			const now = new Date();
+		const now = new Date();
+		try {
 			fsSync.utimesSync(this.#path, now, now);
+
+			return;
+		} catch (error) {
+			const missing = (error as NodeJS.ErrnoException).code === 'ENOENT';
+			if (!missing) {
+				throw error;
+			}
+		}
+
+		const fd = fsSync.openSync(this.#path, 'a');
+		try {
+			fsSync.futimesSync(fd, now, now);
+		} finally {
+			fsSync.closeSync(fd);
 		}
 	}
 
