@@ -1,6 +1,7 @@
 import * as childProcess from 'node:child_process';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { execPipeline, ProcessPipelineError, spawnPipeline } from '../src/process';
+import { execPipeline, ProcessPipelineError, spawnPipeline, spawnManaged } from '../src/process';
+import { CancellationToken, OperationCancelledError } from '../src/cancellation';
 
 vi.mock('node:child_process', async (importOriginal) => ({
 	...await importOriginal<typeof childProcess>(),
@@ -11,6 +12,14 @@ afterEach(() => {
 });
 
 describe('pipeline failure cleanup', () => {
+	it('does not spawn managed work with an already-cancelled token', () => {
+		const spawn = vi.spyOn(childProcess, 'spawn');
+		expect(() => spawnManaged(process.execPath, [], {
+			token: CancellationToken.Cancelled,
+		})).toThrow(OperationCancelledError);
+		expect(spawn).not.toHaveBeenCalled();
+	});
+
 	it.each(['missing', 'invalid', 'nonzero'])('reaps siblings after %s failure', async (failure) => {
 		const children: childProcess.ChildProcess[] = [];
 		const original = childProcess.spawn;

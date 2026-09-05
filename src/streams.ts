@@ -60,6 +60,10 @@ function createAbortBridge(options: StreamCancellationOptions): {
 	cleanup(): void;
 } {
 	const controller = new AbortController();
+	if (options.token?.isCancellationRequested) {
+		controller.abort(options.token.cancellationReason);
+	}
+
 	const registration = options.token?.register((token) => controller.abort(token.cancellationReason));
 	const onAbort = () => controller.abort(options.signal?.reason);
 
@@ -105,6 +109,7 @@ export async function collectStream(
 	options: CollectStreamOptions = {}
 ): Promise<string | Buffer> {
 	validateLimit(options.maxBytes, 'maxBytes');
+	options.token?.throwIfCancellationRequested();
 
 	const encoding = options.encoding === undefined ? 'utf-8' : options.encoding;
 	const chunks: Buffer[] = [];
@@ -140,6 +145,7 @@ export async function* iterateLines(
 	options: IterateLinesOptions = {}
 ): AsyncIterableIterator<string> {
 	validateLimit(options.maxLineLength, 'maxLineLength');
+	options.token?.throwIfCancellationRequested();
 
 	const decoder = new StringDecoder(options.encoding ?? 'utf-8');
 	const bridge = createAbortBridge(options);

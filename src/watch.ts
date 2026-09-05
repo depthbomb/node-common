@@ -134,6 +134,10 @@ function createAbortBridge(options: WatchPathOptions): {
 	cleanup(): void;
 } {
 	const controller = new AbortController();
+	if (options.token?.isCancellationRequested) {
+		controller.abort(options.token.cancellationReason);
+	}
+
 	const registration = options.token?.register((token) => controller.abort(token.cancellationReason));
 	const onAbort = () => controller.abort(options.signal?.reason);
 

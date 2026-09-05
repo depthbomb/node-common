@@ -97,6 +97,10 @@ export class ProcessPipelineError extends Error {
 
 function createAbortBridge(token?: CancellationToken, signal?: AbortSignal) {
 	const controller = new AbortController();
+	if (token?.isCancellationRequested) {
+		controller.abort(token.cancellationReason);
+	}
+
 	const registration = token?.register(() => controller.abort(token.cancellationReason));
 	const onAbort = () => controller.abort(signal?.reason);
 	if (signal) {
@@ -344,6 +348,11 @@ export class ManagedProcess {
 
 		if (!Number.isFinite(forceKillAfterMs) || forceKillAfterMs < 0) {
 			throw new RangeError('forceKillAfterMs must be a finite non-negative number');
+		}
+
+		token?.throwIfCancellationRequested();
+		if (signal?.aborted) {
+			throw new OperationCancelledError(String(signal.reason ?? 'AbortSignal was aborted'));
 		}
 
 		this.encoding = encoding;

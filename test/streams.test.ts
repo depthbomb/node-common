@@ -1,6 +1,6 @@
 import { PassThrough, Readable, Transform, Writable } from 'node:stream';
 import { describe, expect, it } from 'vitest';
-import { CancellationTokenSource, OperationCancelledError } from '../src/cancellation';
+import { CancellationToken, CancellationTokenSource, OperationCancelledError } from '../src/cancellation';
 import {
 	LineLimitExceededError,
 	StreamLimitExceededError,
@@ -10,6 +10,22 @@ import {
 } from '../src/streams';
 
 describe('streams', () => {
+	it('rejects pre-cancelled ready streams without consuming their data', async () => {
+		const source = Readable.from(['ready']);
+		await expect(collectStream(source, {
+			token: CancellationToken.Cancelled,
+		})).rejects.toBeInstanceOf(OperationCancelledError);
+		expect(source.readableDidRead).toBe(false);
+		const lines = iterateLines(source, {
+			token: CancellationToken.Cancelled,
+		});
+		await expect(lines.next()).rejects.toBeInstanceOf(OperationCancelledError);
+		await expect(pipelineWithCancellation([Readable.from(['ready']), new PassThrough()], {
+			token: CancellationToken.Cancelled,
+		})).rejects.toBeInstanceOf(OperationCancelledError);
+		source.destroy();
+	});
+
 	it('collects text and binary streams', async () => {
 		await expect(collectStream(Readable.from(['hello', ' ', 'world']))).resolves.toBe('hello world');
 		await expect(collectStream(Readable.from([Buffer.from([1, 2]), Buffer.from([3])]), {
