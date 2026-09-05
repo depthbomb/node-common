@@ -247,10 +247,53 @@ function prepareManagedOptions(
 	};
 }
 
+async function disposePipeline(processes: readonly ManagedProcess[]): Promise<void> {
+	await Promise.allSettled(processes.map((managed) => managed[Symbol.asyncDispose]()));
+}
+
+function createPipeline(
+	commands: readonly ProcessCommand[],
+	options: ProcessPipelineOptions,
+	processes: ManagedProcess[]
+): void {
+	if (commands.length < 2) {
+		throw new RangeError('A process pipeline requires at least two commands');
+	}
+
+	let stopping = false;
+	const stop = () => {
+		if (!stopping) {
+			stopping = true;
+			void disposePipeline(processes);
+		}
+	};
+	for (let index = commands.length - 1; index >= 0; index -= 1) {
+		const command = commands[index];
+		const managed = spawnManaged(command.command, command.args, {
+			...command.options,
+			token: options.token,
+			signal: options.signal,
+			stdin: index === 0 ? options.stdin : null,
+		});
+		const downstream = processes[0];
+		processes.unshift(managed);
+		void managed.result.then((output) => {
+			if (!output.ok) {
+				stop();
+			}
+		}, stop);
+
+		if (downstream) {
+			managed.child.stdout?.pipe(downstream.child.stdin!);
+		}
+	}
+}
+
 export class ManagedProcess {
 	public readonly child: ChildProcess;
 	public readonly result: Promise<ProcessOutput>;
 
+	private readonly closed: Promise<void>;
 	private readonly stdoutChunks: Buffer[] = [];
 	private readonly stderrChunks: Buffer[] = [];
 	private readonly stdoutQueue: BoundedLineQueue;
@@ -314,6 +357,10 @@ export class ManagedProcess {
 			detached: killTree && process.platform !== 'win32' ? true : spawnOptions.detached,
 			killSignal: killSignal ?? 'SIGTERM',
 			stdio: 'pipe',
+		});
+
+		this.closed = new Promise<void>((resolve) => {
+			this.child.once('close', () => resolve());
 		});
 
 		this.child.stdout?.on('data', (chunk: Buffer) => this.captureChunk('stdout', chunk));
@@ -419,15 +466,30 @@ export class ManagedProcess {
 	}
 
 	public async [Symbol.asyncDispose](): Promise<void> {
-		if (this.child.exitCode === null && this.child.signalCode === null) {
+		const settled = this.result.catch(() => undefined);
+		const forceKill = setTimeout(() => {
 			if (this.killTreeEnabled) {
-				await this.terminateTree();
+				void this.terminateTree('SIGKILL').catch(() => this.child.kill('SIGKILL'));
 			} else {
-				this.terminate();
+				this.child.kill('SIGKILL');
 			}
-		}
+		}, this.forceKillAfterMs);
+		forceKill.unref();
+		try {
+			const running = this.child.exitCode === null && this.child.signalCode === null;
+			if (running) {
+				if (this.killTreeEnabled) {
+					await this.terminateTree();
+				} else {
+					this.terminate();
+				}
+			}
 
-		await this.result.catch(() => undefined);
+			await this.closed;
+			await settled;
+		} finally {
+			clearTimeout(forceKill);
+		}
 	}
 
 	private captureChunk(stream: 'stdout' | 'stderr', chunk: Buffer): void {
@@ -507,24 +569,12 @@ export function spawnPipeline(
 	commands: readonly ProcessCommand[],
 	options: ProcessPipelineOptions = {}
 ): ManagedProcess[] {
-	if (commands.length < 2) {
-		throw new RangeError('A process pipeline requires at least two commands');
-	}
-
-	const processes = new Array<ManagedProcess>(commands.length);
-	for (let index = commands.length - 1; index >= 0; index -= 1) {
-		const command = commands[index];
-		const managedProcess = spawnManaged(command.command, command.args, {
-			...command.options,
-			token: options.token,
-			signal: options.signal,
-			stdin: index === 0 ? options.stdin : null,
-		});
-		processes[index] = managedProcess;
-
-		if (index < commands.length - 1) {
-			managedProcess.child.stdout?.pipe(processes[index + 1].child.stdin!);
-		}
+	const processes: ManagedProcess[] = [];
+	try {
+		createPipeline(commands, options, processes);
+	} catch (error) {
+		void disposePipeline(processes);
+		throw error;
 	}
 
 	return processes;
@@ -534,13 +584,20 @@ export async function execPipeline(
 	commands: readonly ProcessCommand[],
 	options: ProcessPipelineOptions = {}
 ): Promise<ProcessOutput[]> {
-	const processes = spawnPipeline(commands, options);
-	const outputs = await Promise.all(processes.map((managedProcess) => managedProcess.result));
-	if (outputs.some((output) => !output.ok)) {
-		throw new ProcessPipelineError(outputs);
-	}
+	const processes: ManagedProcess[] = [];
+	try {
+		createPipeline(commands, options, processes);
+		const outputs = await Promise.all(processes.map((managedProcess) => managedProcess.result));
+		const failed = outputs.some((output) => !output.ok);
+		if (failed) {
+			throw new ProcessPipelineError(outputs);
+		}
 
-	return outputs;
+		return outputs;
+	} catch (error) {
+		await disposePipeline(processes);
+		throw error;
+	}
 }
 
 export async function execWithTimeout(
