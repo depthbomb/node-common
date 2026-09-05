@@ -550,6 +550,7 @@ export class CancellationTokenSource {
 
 	public static createLinkedTokenSource(...tokens: CancellationToken[]): CancellationTokenSource {
 		const source = new CancellationTokenSource();
+		source.tokenInstance.register(() => source.unlinkLinkedTokens());
 
 		for (const token of tokens) {
 			if (token.isCancellationRequested) {

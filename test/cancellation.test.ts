@@ -13,6 +13,21 @@ afterEach(() => {
 });
 
 describe('cancellation', () => {
+	it('unlinks disposed combined tokens from long-lived inputs', () => {
+		const first  = new CancellationToken();
+		const second = new CancellationToken();
+		for (let index = 0; index < 20; index += 1) {
+			const combined = CancellationTokenUtils.any(first, second);
+			combined.register(() => {
+				throw new Error('callback failed');
+			});
+
+			expect(() => combined.dispose()).toThrow(AggregateError);
+			expect(first.registrationCount).toBe(0);
+			expect(second.registrationCount).toBe(0);
+		}
+	});
+
 	it('aborts exported controllers on disposal even when another callback throws', () => {
 		const source = new CancellationTokenSource();
 		const token = source.token;
