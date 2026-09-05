@@ -151,8 +151,15 @@ function quoteIfNeeded(segment: string): string {
 
 function isExecutable(filePath: string): boolean {
 	try {
-		if (!fs.statSync(filePath).isFile()) return false;
+		const file = fs.statSync(filePath, {
+			throwIfNoEntry: false,
+		})?.isFile() ?? false;
+		if (!file) {
+			return false;
+		}
+
 		fs.accessSync(filePath, fs.constants.X_OK);
+
 		return true;
 	} catch {
 		return false;
@@ -674,8 +681,8 @@ export async function execProcess(
 }
 
 export function whichSync(command: string, options: WhichOptions = {}): string | undefined {
-	const cwd              = options.cwd || process.cwd();
-	const envPath          = options.envPath || process.env.PATH || '';
+	const cwd              = options.cwd ?? process.cwd();
+	const envPath          = options.envPath ?? process.env.PATH ?? '';
 	const pathEntries      = envPath.split(path.delimiter).filter(Boolean);
 	const hasPathSeparator = command.includes(path.sep) || command.includes('/');
 
@@ -697,11 +704,7 @@ export function whichSync(command: string, options: WhichOptions = {}): string |
 		for (const candidate of candidates) {
 			const joined = dir ? path.join(dir, candidate) : candidate;
 			const resolved = path.resolve(cwd, joined);
-			if (!fs.existsSync(resolved)) {
-				continue;
-			}
-
-			if (windows || isExecutable(resolved)) {
+			if (isExecutable(resolved)) {
 				return resolved;
 			}
 		}

@@ -1,4 +1,6 @@
 import { it, expect, describe } from 'vitest';
+import { basename } from 'node:path';
+import { TempDir } from '../src/temp';
 import { CancellationTokenSource, OperationCancelledError, TimeoutError } from '../src/cancellation';
 import {
 	ProcessExecutionError,
@@ -13,6 +15,19 @@ import {
 } from '../src/process';
 
 describe('process', () => {
+	it('agrees on directories and explicitly empty executable search paths', async () => {
+		await (await TempDir.create()).use(async (root) => {
+			const directory = await root.joinpath('fake.EXE').ensureDir();
+			expect(whichSync(directory.toString())).toBeUndefined();
+			expect(await which(directory.toString())).toBeUndefined();
+			const options = {
+				envPath: '',
+			};
+			expect(whichSync(basename(process.execPath), options)).toBeUndefined();
+			expect(await which(basename(process.execPath), options)).toBeUndefined();
+		});
+	});
+
 	it('captures stdout/stderr', async () => {
 		const result = await captureProcess(
 			process.execPath,
