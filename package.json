@@ -164,6 +164,7 @@
 	},
 	"scripts": {
 		"bench": "yarn build && node benchmark/benchmark.mjs",
+		"bench:lines": "yarn build && node benchmark/lines.mjs",
 		"build": "tsdown",
 		"typecheck": "tsc --noEmit",
 		"dist": "yarn build",

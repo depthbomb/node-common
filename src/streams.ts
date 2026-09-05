@@ -1,3 +1,4 @@
+import { LineBuffer } from './internal/line-buffer.js';
 import { StringDecoder } from 'node:string_decoder';
 import { addAbortSignal } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
@@ -149,42 +150,40 @@ export async function* iterateLines(
 
 	const decoder = new StringDecoder(options.encoding ?? 'utf-8');
 	const bridge = createAbortBridge(options);
-	let buffered = '';
+	const buffered = new LineBuffer();
 
 	addAbortSignal(bridge.signal, stream);
 
 	try {
 		for await (const chunk of stream as AsyncIterable<string | Buffer | Uint8Array>) {
-			buffered += typeof chunk === 'string' ? chunk : decoder.write(toBuffer(chunk, options.encoding ?? 'utf-8'));
-
-			let newlineIndex = buffered.indexOf('\n');
+			const text = typeof chunk === 'string' ? chunk : decoder.write(toBuffer(chunk, options.encoding ?? 'utf-8'));
+			let start = 0;
+			let newlineIndex = text.indexOf('\n');
 			while (newlineIndex !== -1) {
-				const endIndex = newlineIndex > 0 && buffered[newlineIndex - 1] === '\r'
-					? newlineIndex - 1
-					: newlineIndex;
-				const line = buffered.slice(0, endIndex);
+				const line = buffered.take(text.slice(start, newlineIndex));
 				if (options.maxLineLength !== undefined && line.length > options.maxLineLength) {
 					throw new LineLimitExceededError(options.maxLineLength, line.length);
 				}
 
 				yield line;
-				buffered = buffered.slice(newlineIndex + 1);
-				newlineIndex = buffered.indexOf('\n');
+				start = newlineIndex + 1;
+				newlineIndex = text.indexOf('\n', start);
 			}
 
-			const pendingLength = buffered.length - (buffered.endsWith('\r') ? 1 : 0);
+			buffered.append(text.slice(start));
+			const pendingLength = buffered.contentLength;
 			if (options.maxLineLength !== undefined && pendingLength > options.maxLineLength) {
 				throw new LineLimitExceededError(options.maxLineLength, pendingLength);
 			}
 		}
 
-		buffered += decoder.end();
+		buffered.append(decoder.end());
 		if (buffered.length > 0) {
 			if (options.maxLineLength !== undefined && buffered.length > options.maxLineLength) {
 				throw new LineLimitExceededError(options.maxLineLength, buffered.length);
 			}
 
-			yield buffered;
+			yield buffered.take('', false);
 		}
 	} catch (error) {
 		mapCancellationError(error, options);

@@ -10,6 +10,34 @@ import {
 } from '../src/streams';
 
 describe('streams', () => {
+	it('preserves multibyte text and delimiters at every byte boundary', async () => {
+		const text = 'first 😀\r\n\nsecond\ntrailing\r';
+		for (const encoding of ['utf8', 'utf16le'] as const) {
+			const bytes = Buffer.from(text, encoding);
+			for (let split = 0; split <= bytes.length; split += 1) {
+				const lines: string[] = [];
+				for await (const line of iterateLines(Readable.from([bytes.subarray(0, split), bytes.subarray(split)]), {
+					encoding,
+				})) {
+					lines.push(line);
+				}
+
+				expect(lines).toEqual(['first 😀', '', 'second', 'trailing\r']);
+			}
+		}
+	});
+
+	it('collects long fragmented records without losing adjacent short lines', async () => {
+		const chunks = Array.from({ length: 128 }, () => Buffer.alloc(8192, 120));
+		chunks.push(Buffer.from('\r\nshort\nlast'));
+		const lines: string[] = [];
+		for await (const line of iterateLines(Readable.from(chunks))) {
+			lines.push(line);
+		}
+
+		expect(lines).toEqual(['x'.repeat(1_048_576), 'short', 'last']);
+	});
+
 	it('applies line limits consistently across every CRLF split', async () => {
 		for (const text of ['abc\r\n', '\r\n']) {
 			const limit = text.length - 2;

@@ -15,6 +15,20 @@ import {
 } from '../src/process';
 
 describe('process', () => {
+	it('iterates fragmented long process records with CRLF and a final partial line', async () => {
+		const managed = spawnManaged(process.execPath, [
+			'-e',
+			'process.stdout.write("x".repeat(1048576)); process.stdout.write("\\r\\n😀\\r\\nlast\\r")',
+		]);
+		const lines: string[] = [];
+		for await (const line of managed.stdoutLines()) {
+			lines.push(line);
+		}
+
+		expect(lines).toEqual(['x'.repeat(1_048_576), '😀', 'last\r']);
+		expect((await managed.result).ok).toBe(true);
+	});
+
 	it('agrees on directories and explicitly empty executable search paths', async () => {
 		await (await TempDir.create()).use(async (root) => {
 			const directory = await root.joinpath('fake.EXE').ensureDir();

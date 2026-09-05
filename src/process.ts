@@ -1,3 +1,4 @@
+import { LineBuffer } from './internal/line-buffer.js';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
@@ -170,7 +171,7 @@ class BoundedLineQueue implements AsyncIterableIterator<string> {
 	private readonly decoder: StringDecoder;
 	private readonly values: string[] = [];
 	private readonly waiters: Array<(result: IteratorResult<string>) => void> = [];
-	private buffered = '';
+	private readonly buffered = new LineBuffer();
 	private ended = false;
 
 	public constructor(encoding: BufferEncoding, private readonly maxQueuedLines: number) {
@@ -194,17 +195,16 @@ class BoundedLineQueue implements AsyncIterableIterator<string> {
 	}
 
 	public push(chunk: Buffer): void {
-		this.buffered += this.decoder.write(chunk);
-
-		let newlineIndex = this.buffered.indexOf('\n');
+		const text = this.decoder.write(chunk);
+		let start = 0;
+		let newlineIndex = text.indexOf('\n');
 		while (newlineIndex !== -1) {
-			const endIndex = newlineIndex > 0 && this.buffered[newlineIndex - 1] === '\r'
-				? newlineIndex - 1
-				: newlineIndex;
-			this.enqueue(this.buffered.slice(0, endIndex));
-			this.buffered = this.buffered.slice(newlineIndex + 1);
-			newlineIndex = this.buffered.indexOf('\n');
+			this.enqueue(this.buffered.take(text.slice(start, newlineIndex)));
+			start = newlineIndex + 1;
+			newlineIndex = text.indexOf('\n', start);
 		}
+
+		this.buffered.append(text.slice(start));
 	}
 
 	public end(): void {
@@ -212,9 +212,9 @@ class BoundedLineQueue implements AsyncIterableIterator<string> {
 			return;
 		}
 
-		this.buffered += this.decoder.end();
+		this.buffered.append(this.decoder.end());
 		if (this.buffered.length > 0) {
-			this.enqueue(this.buffered);
+			this.enqueue(this.buffered.take('', false));
 		}
 
 		this.ended = true;

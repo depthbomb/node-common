@@ -40,3 +40,30 @@ The following baselines were recorded after adding the Node resource-management 
 | Durable atomic write (4 KiB) | 230 ops/s |
 
 Managed-process throughput is dominated by starting a fresh Node process. The atomic-write case includes file flush, rename, and parent-directory synchronization; disabling durability options is intentionally not used as the baseline.
+
+## Fragmented line parsing
+
+Run `yarn bench:lines` to measure long and short records with output validation.
+To compare a saved production bundle, pass its directory to
+`node benchmark/lines.mjs <bundle-directory>`.
+
+On Node v24.17.0 / Windows x64, a CPU profile of the previous implementation
+identified line parsing and garbage collection as the dominant work. The parser
+now scans each incoming chunk once and joins fragments only when emitting a line.
+These are medians of seven samples after warmup, comparing a saved production
+bundle before the parser change with the new parser in separate sequential runs
+on the same host:
+
+| Case | Before | After | Time reduction |
+| --- | ---: | ---: | ---: |
+| Stream, one 1 MiB line | 4.36 ms | 1.01 ms | 76.9% |
+| Stream, one 4 MiB line | 50.11 ms | 4.37 ms | 91.3% |
+| Stream, one 16 MiB line | 727.35 ms | 11.82 ms | 98.4% |
+| Stream, 1 MiB of short lines | 6.47 ms | 5.63 ms | 13.0% |
+| Managed process, one 8 MiB line | 238.33 ms | 93.47 ms | 60.8% |
+
+The managed case includes starting Node and capturing output as well as iterating
+lines. The existing benchmark suite was also run before and after the parser
+change; none of its cases regressed by 10% or more. Filesystem and process timings
+remain sensitive to host activity. These measurements do not establish equivalent
+gains on other runtimes or operating systems.
