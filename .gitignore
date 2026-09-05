@@ -6,3 +6,8 @@
 dist/
 node_modules/
 src/test.ts
+
+# Keep local review and working documentation out of the repository.
+*.md
+!/README.md
+!/BENCHMARKS.md
