@@ -178,7 +178,7 @@
 		"release-it": "^21.0.2",
 		"tsdown": "^0.22.14",
 		"typescript": "^6.0.3",
-		"vitest": "^4.1.10"
+		"vitest": "^5.0.0"
 	},
 	"packageManager": "yarn@4.18.0"
 }
